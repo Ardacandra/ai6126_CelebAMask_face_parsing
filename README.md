@@ -6,3 +6,26 @@ images is used, where both images and annotations have a resolution of 512 x 512
 
 The performance of the network will be evaluated based on the F-measure between the
 predicted masks and the ground truth of the test set.
+
+### Setup Instructions
+
+1. Clone the repository
+
+```bash
+git clone https://github.com/Ardacandra/ai6126_CelebAMask_face_parsing.git
+cd ai6126_CelebAMask_face_parsing
+```
+
+2. Set up the conda environment
+
+```bash
+conda create -n ai6126_CelebAMask_face_parsing python=3.9 -y
+conda activate ai6126_CelebAMask_face_parsing
+```
+
+3. Install dependencies
+
+```bash
+conda install pytorch torchvision cpuonly -c pytorch -y
+pip install -r requirements.txt
+```
