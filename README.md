@@ -26,7 +26,7 @@ conda activate ai6126_CelebAMask_face_parsing
 3. Install dependencies
 
 ```bash
-conda install pytorch torchvision cpuonly -c pytorch -y
+conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia -y
 pip install -r requirements.txt
 ```
 
