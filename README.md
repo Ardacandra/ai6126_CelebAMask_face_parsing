@@ -48,3 +48,18 @@ Try running the visualization script to make sure the dataset is stored correctl
 ```bash
 python visualize_samples.py
 ```
+
+### Training and Evaluation
+
+1. Set `output.run_id`, `model.name`, and other training hyperparameters in `config.yaml`.
+2. Train:
+
+```bash
+python src/train.py
+```
+
+3. Generate validation predictions:
+
+```bash
+python src/evaluate.py
+```

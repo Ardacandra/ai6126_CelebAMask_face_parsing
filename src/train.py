@@ -1,0 +1,174 @@
+import os
+import warnings
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+
+from helper import (
+    CelebAMaskDataset,
+    create_model,
+    custom_collate_fn,
+    count_parameters,
+    get_device,
+    load_config,
+    get_run_dir,
+    read_latest_run_id,
+    resolve_run_id,
+    train_epoch,
+    validate,
+    write_latest_run_id,
+)
+
+warnings.filterwarnings("ignore")
+
+
+def main():
+    config = load_config()
+    device = get_device()
+    print(f"Using device: {device}")
+
+    output_root = config["output"]["dir"]
+    run_id = resolve_run_id(config, output_root, allow_generate=True)
+    run_dir = get_run_dir(output_root, run_id)
+    log_dir = os.path.join(run_dir, "logs")
+    checkpoint_dir = os.path.join(run_dir, "checkpoints")
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    write_latest_run_id(output_root, run_id)
+
+    log_file = os.path.join(log_dir, "train.log")
+
+    def log(message):
+        print(message)
+        with open(log_file, "a") as f:
+            f.write(message + "\n")
+
+    image_size = config["training"]["image_size"]
+    batch_size = config["training"]["batch_size"]
+    num_epochs = config["training"]["num_epochs"]
+    learning_rate = config["training"]["learning_rate"]
+    model_name = config.get("model", {}).get("name", "srresnet")
+    max_params = config["model"].get("max_params", 1821085)
+
+    log("\n" + "=" * 60)
+    log("CelebAMask Face Parsing Training")
+    log("=" * 60)
+    log(f"Run ID: {run_id}")
+    log(f"Output dir: {run_dir}")
+
+    train_dataset = CelebAMaskDataset(
+        config["data"]["train"]["images"],
+        config["data"]["train"]["masks"],
+        image_size=image_size,
+        is_train=True,
+    )
+
+    val_masks_dir = config["data"]["val"].get("masks", None)
+    val_dataset = CelebAMaskDataset(
+        config["data"]["val"]["images"],
+        masks_dir=val_masks_dir,
+        image_size=image_size,
+        is_train=False,
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+        collate_fn=custom_collate_fn,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+        collate_fn=custom_collate_fn,
+    )
+
+    log("\nDataset Info:")
+    log(f"  Train samples: {len(train_dataset)}")
+    log(f"  Val samples: {len(val_dataset)}")
+    log(f"  Image size: {image_size}x{image_size}")
+    log(f"  Batch size: {batch_size}")
+
+    model = create_model(config)
+    model = model.to(device)
+
+    total_params, trainable_params = count_parameters(model)
+    log("\nModel Parameters:")
+    log(f"  Model name: {model_name}")
+    log(f"  Total parameters: {total_params:,}")
+    log(f"  Trainable parameters: {trainable_params:,}")
+    log(f"  Max allowed: {max_params:,}")
+
+    if trainable_params > max_params:
+        log(
+            f"\nERROR: Model has {trainable_params:,} trainable parameters, exceeds limit of {max_params:,}"
+        )
+        log("Please reduce model complexity.")
+        return
+    else:
+        log(f"✓ Model parameters within limit ({trainable_params:,} < {max_params:,})")
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=5
+    )
+
+    checkpoint_every = config["training"].get("checkpoint_every", 1)
+
+    log("\nTraining Configuration:")
+    log(f"  Epochs: {num_epochs}")
+    log(f"  Learning rate: {learning_rate}")
+    log(f"  Device: {device}")
+    log(f"  Checkpoint every: {checkpoint_every} epoch(s)")
+    log("\n" + "=" * 60)
+
+    best_val_loss = float("inf")
+    patience = 10
+    patience_counter = 0
+
+    for epoch in range(num_epochs):
+        log(f"\nEpoch {epoch + 1}/{num_epochs}")
+
+        train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
+
+        if val_dataset.has_masks:
+            val_loss = validate(model, val_loader, criterion, device)
+            log(f"  Train Loss: {train_loss:.4f}")
+            log(f"  Val Loss: {val_loss:.4f}")
+
+            scheduler.step(val_loss)
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+                model_path = os.path.join(run_dir, "best_model.pth")
+                torch.save(model.state_dict(), model_path)
+                log(f"  ✓ Best model saved to {model_path}")
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    log(f"\nEarly stopping triggered after {epoch + 1} epochs")
+                    break
+        else:
+            log(f"  Train Loss: {train_loss:.4f}")
+            model_path = os.path.join(run_dir, "best_model.pth")
+            torch.save(model.state_dict(), model_path)
+            log(f"  ✓ Model saved to {model_path}")
+
+        if checkpoint_every > 0 and (epoch + 1) % checkpoint_every == 0:
+            checkpoint_path = os.path.join(checkpoint_dir, f"epoch_{epoch + 1}.pth")
+            torch.save(model.state_dict(), checkpoint_path)
+            log(f"  ✓ Checkpoint saved to {checkpoint_path}")
+
+    log("\n" + "=" * 60)
+    log("Training Complete!")
+    log("=" * 60)
+
+
+if __name__ == "__main__":
+    main()

@@ -11,6 +11,7 @@ data:
 # Output directory
 output:
   dir: "out"
+  run_id: ""
 
 # Visualization settings
 visualization:
@@ -22,11 +23,13 @@ visualization:
 # Model training settings
 training:
   image_size: 512
-  batch_size: 8
-  num_epochs: 100
+  batch_size: 4
+  num_epochs: 5
   learning_rate: 0.001
+  checkpoint_every: 1
 
 # Model settings
 model:
+  name: "srresnet"
   num_classes: 19  # CelebAMask-HQ has 19 classes
   max_params: 1821085
