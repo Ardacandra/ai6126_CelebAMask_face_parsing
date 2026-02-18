@@ -24,12 +24,13 @@ visualization:
 training:
   image_size: 512
   batch_size: 4
-  num_epochs: 3
+  num_epochs: 50
   learning_rate: 0.001
-  checkpoint_every: 1
+  checkpoint_every: 5
   val_split: 0.2
   split_seed: 42
   patience: 10
+  use_class_weights: true  # Handle class imbalance
 
 # Model settings
 model:

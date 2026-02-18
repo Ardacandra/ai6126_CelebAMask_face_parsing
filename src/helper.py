@@ -106,10 +106,7 @@ class CelebAMaskDataset(Dataset):
                                    std=[0.229, 0.224, 0.225])
             ])
 
-        self.mask_transform = transforms.Compose([
-            transforms.Resize((image_size, image_size), interpolation=Image.NEAREST),
-            transforms.ToTensor()
-        ])
+        self.mask_transform = transforms.Resize((image_size, image_size), interpolation=Image.NEAREST)
 
     def __len__(self):
         return len(self.image_files)
@@ -125,8 +122,17 @@ class CelebAMaskDataset(Dataset):
 
         if self.has_masks:
             mask_path = os.path.join(self.masks_dir, mask_file)
-            mask = Image.open(mask_path).convert("L")
-            mask = self.mask_transform(mask)
+            mask_pil = Image.open(mask_path)
+            
+            # Resize mask (keeps palette indices intact)
+            mask_pil = self.mask_transform(mask_pil)
+            
+            # Extract raw palette indices as class labels
+            mask = np.array(mask_pil, dtype=np.uint8)
+            
+            # Convert to tensor
+            mask = torch.from_numpy(mask).unsqueeze(0).float()
+            
             return img, mask, img_file
         else:
             return img, None, img_file
@@ -150,6 +156,45 @@ def count_parameters(model):
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     return total_params, trainable_params
+
+
+def compute_class_weights(dataset, num_classes=19, device='cpu'):
+    """Compute class weights for handling imbalanced data"""
+    print("\nComputing class weights from dataset...")
+    class_counts = np.zeros(num_classes, dtype=np.int64)
+    
+    # Sample masks to compute class distribution
+    sample_size = min(len(dataset), 500)
+    indices = np.random.choice(len(dataset), sample_size, replace=False)
+    
+    for idx in tqdm(indices, desc="Sampling class distribution"):
+        _, mask, _ = dataset[idx]
+        if mask is not None:
+            mask_np = mask.numpy().astype(int).flatten()
+            for class_id in range(num_classes):
+                class_counts[class_id] += (mask_np == class_id).sum()
+    
+    # Compute inverse frequency weights
+    total_pixels = class_counts.sum()
+    class_weights = np.zeros(num_classes, dtype=np.float32)
+    
+    for i in range(num_classes):
+        if class_counts[i] > 0:
+            # Inverse frequency with smoothing
+            class_weights[i] = total_pixels / (num_classes * class_counts[i])
+        else:
+            class_weights[i] = 0.0
+    
+    # Normalize weights
+    class_weights = class_weights / class_weights.sum() * num_classes
+    
+    print("Class weights computed:")
+    for i in range(num_classes):
+        if class_counts[i] > 0:
+            pct = 100.0 * class_counts[i] / total_pixels
+            print(f"  Class {i:2d}: weight={class_weights[i]:.3f} (freq={pct:.2f}%)")
+    
+    return torch.FloatTensor(class_weights).to(device)
 
 
 def train_epoch(model, dataloader, criterion, optimizer, device):
@@ -197,6 +242,30 @@ def generate_predictions(model, dataloader, output_dir, device):
     model.eval()
     os.makedirs(output_dir, exist_ok=True)
 
+    # Define CelebAMask-HQ color palette for 19 classes
+    PALETTE = np.array([[i, i, i] for i in range(256)])
+    PALETTE[:19] = np.array([
+        [0, 0, 0],          # 0: background
+        [204, 0, 0],        # 1: skin
+        [76, 153, 0],       # 2: nose
+        [204, 204, 0],      # 3: eye_g (glasses)
+        [51, 51, 255],      # 4: l_eye
+        [204, 0, 204],      # 5: r_eye
+        [0, 255, 255],      # 6: l_brow
+        [255, 204, 204],    # 7: r_brow
+        [102, 51, 0],       # 8: l_ear
+        [255, 0, 0],        # 9: r_ear
+        [102, 204, 0],      # 10: mouth
+        [255, 255, 0],      # 11: u_lip
+        [0, 0, 153],        # 12: l_lip
+        [0, 0, 204],        # 13: hair
+        [255, 51, 153],     # 14: hat
+        [0, 204, 204],      # 15: ear_ring
+        [0, 51, 0],         # 16: neck_lace
+        [255, 153, 51],     # 17: neck
+        [0, 204, 0],        # 18: cloth
+    ])
+
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Generating Predictions"):
             images = batch[0].to(device)
@@ -208,7 +277,11 @@ def generate_predictions(model, dataloader, output_dir, device):
             for i, img_file in enumerate(img_files):
                 pred_mask = predictions[i].cpu().numpy().astype(np.uint8)
                 output_path = os.path.join(output_dir, img_file.replace(".jpg", "_pred.png"))
-                Image.fromarray(pred_mask).save(output_path)
+                
+                # Create palette-indexed image
+                mask_img = Image.fromarray(pred_mask)
+                mask_img.putpalette(PALETTE.reshape(-1).tolist())
+                mask_img.save(output_path)
 
 
 def split_train_val(dataset, val_split=0.2, seed=42):
