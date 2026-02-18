@@ -1,0 +1,31 @@
+# CelebAMask Face Parsing Configuration
+
+# Dataset paths
+data:
+  train:
+    images: "data/train/images"
+    masks: "data/train/masks"
+  val:
+    images: "data/val/images"
+
+# Output directory
+output:
+  dir: "out"
+
+# Visualization settings
+visualization:
+  num_samples: 6
+  dpi: 150
+  figsize_width: 10
+  figsize_height_per_sample: 3
+
+# Model training settings
+training:
+  image_size: 512
+  batch_size: 8
+  num_epochs: 100
+  learning_rate: 0.001
+
+# Model settings
+model:
+  num_classes: 19  # CelebAMask-HQ has 19 classes

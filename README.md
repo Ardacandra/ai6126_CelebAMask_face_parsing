@@ -29,3 +29,22 @@ conda activate ai6126_CelebAMask_face_parsing
 conda install pytorch torchvision cpuonly -c pytorch -y
 pip install -r requirements.txt
 ```
+
+4. Prepare the CelebAMask-HQ Dataset
+
+Download the dataset and store in `./data` folder. The format should be as follows:
+
+```
+data/
+├── train/
+│   ├── images/
+│   └── masks/
+└── val/
+    └── images/
+```
+
+Try running the visualization script to make sure the dataset are stored correctly:
+
+```bash
+python visualize_samples.py
+```
