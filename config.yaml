@@ -29,3 +29,4 @@ training:
 # Model settings
 model:
   num_classes: 19  # CelebAMask-HQ has 19 classes
+  max_params: 1821085
