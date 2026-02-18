@@ -43,7 +43,7 @@ data/
     └── images/
 ```
 
-Try running the visualization script to make sure the dataset are stored correctly:
+Try running the visualization script to make sure the dataset is stored correctly:
 
 ```bash
 python visualize_samples.py
