@@ -15,6 +15,7 @@ from helper import (
     get_run_dir,
     read_latest_run_id,
     resolve_run_id,
+    split_train_val,
     train_epoch,
     validate,
     write_latest_run_id,
@@ -38,6 +39,10 @@ def main():
     write_latest_run_id(output_root, run_id)
 
     log_file = os.path.join(log_dir, "train.log")
+    metrics_file = os.path.join(run_dir, "metrics.csv")
+    if not os.path.exists(metrics_file):
+        with open(metrics_file, "w") as f:
+            f.write("epoch,train_loss,val_loss\n")
 
     def log(message):
         print(message)
@@ -72,6 +77,18 @@ def main():
         is_train=False,
     )
 
+    has_val_labels = val_dataset.has_masks
+    if not has_val_labels:
+        val_split = config["training"].get("val_split", 0.2)
+        split_seed = config["training"].get("split_seed", 42)
+        train_dataset, val_dataset = split_train_val(
+            train_dataset, val_split=val_split, seed=split_seed
+        )
+        has_val_labels = True
+        log("\nVal labels not found; using train/val split from training data.")
+        log(f"  Val split: {val_split:.2f}")
+        log(f"  Split seed: {split_seed}")
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -79,17 +96,19 @@ def main():
         num_workers=4,
         collate_fn=custom_collate_fn,
     )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=4,
-        collate_fn=custom_collate_fn,
-    )
+    val_loader = None
+    if val_dataset is not None:
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=4,
+            collate_fn=custom_collate_fn,
+        )
 
     log("\nDataset Info:")
     log(f"  Train samples: {len(train_dataset)}")
-    log(f"  Val samples: {len(val_dataset)}")
+    log(f"  Val samples: {len(val_dataset) if val_dataset is not None else 0}")
     log(f"  Image size: {image_size}x{image_size}")
     log(f"  Batch size: {batch_size}")
 
@@ -119,16 +138,17 @@ def main():
     )
 
     checkpoint_every = config["training"].get("checkpoint_every", 1)
+    patience = config["training"].get("patience", 10)
 
     log("\nTraining Configuration:")
     log(f"  Epochs: {num_epochs}")
     log(f"  Learning rate: {learning_rate}")
     log(f"  Device: {device}")
     log(f"  Checkpoint every: {checkpoint_every} epoch(s)")
+    log(f"  Early stopping patience: {patience}")
     log("\n" + "=" * 60)
 
     best_val_loss = float("inf")
-    patience = 10
     patience_counter = 0
 
     for epoch in range(num_epochs):
@@ -136,10 +156,13 @@ def main():
 
         train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
 
-        if val_dataset.has_masks:
+        if has_val_labels and val_loader is not None:
             val_loss = validate(model, val_loader, criterion, device)
             log(f"  Train Loss: {train_loss:.4f}")
             log(f"  Val Loss: {val_loss:.4f}")
+
+            with open(metrics_file, "a") as f:
+                f.write(f"{epoch + 1},{train_loss:.20f},{val_loss:.20f}\n")
 
             scheduler.step(val_loss)
 
@@ -159,6 +182,9 @@ def main():
             model_path = os.path.join(run_dir, "best_model.pth")
             torch.save(model.state_dict(), model_path)
             log(f"  ✓ Model saved to {model_path}")
+
+            with open(metrics_file, "a") as f:
+                f.write(f"{epoch + 1},{train_loss:.20f},\n")
 
         if checkpoint_every > 0 and (epoch + 1) % checkpoint_every == 0:
             checkpoint_path = os.path.join(checkpoint_dir, f"epoch_{epoch + 1}.pth")

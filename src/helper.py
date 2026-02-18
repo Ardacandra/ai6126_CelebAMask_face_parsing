@@ -1,14 +1,19 @@
 import os
+import sys
 from pathlib import Path
 from datetime import datetime
 import yaml
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Subset
 from torchvision import transforms
 from PIL import Image
 import numpy as np
 from tqdm import tqdm
+
+project_root = Path(__file__).resolve().parents[1]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from model import SRResNetFaceParsing
 
@@ -18,7 +23,7 @@ MODEL_REGISTRY = {
 
 
 def get_project_root():
-    return Path(__file__).resolve().parents[1]
+    return project_root
 
 
 def load_config(config_path=None):
@@ -204,3 +209,23 @@ def generate_predictions(model, dataloader, output_dir, device):
                 pred_mask = predictions[i].cpu().numpy().astype(np.uint8)
                 output_path = os.path.join(output_dir, img_file.replace(".jpg", "_pred.png"))
                 Image.fromarray(pred_mask).save(output_path)
+
+
+def split_train_val(dataset, val_split=0.2, seed=42):
+    if val_split <= 0 or val_split >= 1:
+        raise ValueError("val_split must be between 0 and 1")
+
+    num_samples = len(dataset)
+    val_size = int(num_samples * val_split)
+    if val_size < 1:
+        val_size = 1
+    if val_size >= num_samples:
+        val_size = num_samples - 1
+
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    indices = torch.randperm(num_samples, generator=generator).tolist()
+    val_indices = indices[:val_size]
+    train_indices = indices[val_size:]
+
+    return Subset(dataset, train_indices), Subset(dataset, val_indices)

@@ -11,7 +11,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: ""
+  run_id: "srresnet_test_run"
 
 # Visualization settings
 visualization:
@@ -24,9 +24,12 @@ visualization:
 training:
   image_size: 512
   batch_size: 4
-  num_epochs: 5
+  num_epochs: 3
   learning_rate: 0.001
   checkpoint_every: 1
+  val_split: 0.2
+  split_seed: 42
+  patience: 10
 
 # Model settings
 model:
