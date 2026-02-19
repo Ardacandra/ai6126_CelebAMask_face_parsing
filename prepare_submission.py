@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 import yaml
+from PIL import Image
 
 
 def get_project_root():
@@ -70,7 +71,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def prepare_masks(predictions_dir, masks_dir):
+def prepare_masks(predictions_dir, masks_dir, output_size=(512, 512)):
     os.makedirs(masks_dir, exist_ok=True)
 
     copied_count = 0
@@ -90,7 +91,12 @@ def prepare_masks(predictions_dir, masks_dir):
             continue
 
         dst_path = os.path.join(masks_dir, target_name)
-        shutil.copy2(src_path, dst_path)
+
+        with Image.open(src_path) as img:
+            if img.size != output_size:
+                img = img.resize(output_size, resample=Image.NEAREST)
+
+            img.save(dst_path)
         copied_count += 1
 
     return copied_count, skipped

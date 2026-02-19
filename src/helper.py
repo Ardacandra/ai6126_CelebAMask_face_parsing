@@ -250,7 +250,7 @@ def validate(model, dataloader, criterion, device):
     return total_loss / max(count, 1)
 
 
-def generate_predictions(model, dataloader, output_dir, device):
+def generate_predictions(model, dataloader, output_dir, device, output_size=(512, 512)):
     model.eval()
     os.makedirs(output_dir, exist_ok=True)
 
@@ -292,6 +292,8 @@ def generate_predictions(model, dataloader, output_dir, device):
                 
                 # Create palette-indexed image
                 mask_img = Image.fromarray(pred_mask)
+                if mask_img.size != output_size:
+                    mask_img = mask_img.resize(output_size, resample=Image.NEAREST)
                 mask_img.putpalette(PALETTE.reshape(-1).tolist())
                 mask_img.save(output_path)
 
