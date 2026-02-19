@@ -63,3 +63,14 @@ python src/train.py
 ```bash
 python src/evaluate.py
 ```
+
+4. Prepare submission package (matches `data/sample-submission/masks` format):
+
+```bash
+python prepare_submission.py
+```
+
+This creates:
+
+- `out/<run_id>/submission/masks/*.png`
+- `out/<run_id>/<run_id>_submission.zip`
