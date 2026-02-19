@@ -59,7 +59,7 @@ def main():
     batch_size = config["training"]["batch_size"]
     num_epochs = config["training"]["num_epochs"]
     learning_rate = config["training"]["learning_rate"]
-    model_name = config.get("model", {}).get("name", "srresnet")
+    model_name = config.get("model", {}).get("name", "srresnet_baseline")
     max_params = config["model"].get("max_params", 1821085)
 
     log("\n" + "=" * 60)

@@ -15,11 +15,10 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from model import SRResNetFaceParsing, SRResNetFaceParsingV2
+from model import SRResNetBaseline
 
 MODEL_REGISTRY = {
-    "srresnet": SRResNetFaceParsing,
-    "srresnet_v2": SRResNetFaceParsingV2,
+    "srresnet_baseline": SRResNetBaseline,
 }
 
 
@@ -40,34 +39,27 @@ def get_device():
 
 def create_model(config):
     model_cfg = config.get("model", {})
-    model_name = str(model_cfg.get("name", "srresnet")).lower()
+    model_name = str(model_cfg.get("name", "srresnet_baseline")).lower()
     if model_name not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model name: {model_name}")
 
     num_classes = model_cfg.get("num_classes", 19)
     arch_cfg = model_cfg.get("arch_configs", {}).get(model_name, {})
 
-    if model_name == "srresnet":
+    if model_name == "srresnet_baseline":
         num_residual_blocks = arch_cfg.get(
-            "num_residual_blocks", model_cfg.get("num_residual_blocks", 8)
+            "num_residual_blocks", model_cfg.get("num_residual_blocks", 16)
         )
-        return SRResNetFaceParsing(
-            num_classes=num_classes,
-            num_residual_blocks=num_residual_blocks,
+        context_dilations = arch_cfg.get(
+            "context_dilations", model_cfg.get("context_dilations", [2, 4, 8])
         )
-
-    if model_name == "srresnet_v2":
-        num_residual_blocks = arch_cfg.get(
-            "num_residual_blocks", model_cfg.get("num_residual_blocks", 10)
-        )
-        channels = arch_cfg.get("channels", model_cfg.get("channels", 96))
         decoder_channels = arch_cfg.get(
-            "decoder_channels", model_cfg.get("decoder_channels", [48, 24])
+            "decoder_channels", model_cfg.get("decoder_channels", [64, 48, 32])
         )
-        return SRResNetFaceParsingV2(
+        return SRResNetBaseline(
             num_classes=num_classes,
             num_residual_blocks=num_residual_blocks,
-            channels=channels,
+            context_dilations=tuple(context_dilations),
             decoder_channels=tuple(decoder_channels),
         )
 

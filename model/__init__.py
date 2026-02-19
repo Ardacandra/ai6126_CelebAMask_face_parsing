@@ -1,4 +1,3 @@
-from .srresnet import SRResNetFaceParsing
-from .srresnet_v2 import SRResNetFaceParsingV2
+from .srresnet_baseline import SRResNetBaseline
 
-__all__ = ["SRResNetFaceParsing", "SRResNetFaceParsingV2"]
+__all__ = ["SRResNetBaseline"]
