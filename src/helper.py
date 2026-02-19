@@ -45,14 +45,25 @@ def create_model(config):
         raise ValueError(f"Unknown model name: {model_name}")
 
     num_classes = model_cfg.get("num_classes", 19)
+    arch_cfg = model_cfg.get("arch_configs", {}).get(model_name, {})
 
     if model_name == "srresnet":
-        return SRResNetFaceParsing(num_classes=num_classes)
+        num_residual_blocks = arch_cfg.get(
+            "num_residual_blocks", model_cfg.get("num_residual_blocks", 8)
+        )
+        return SRResNetFaceParsing(
+            num_classes=num_classes,
+            num_residual_blocks=num_residual_blocks,
+        )
 
     if model_name == "srresnet_v2":
-        num_residual_blocks = model_cfg.get("num_residual_blocks", 10)
-        channels = model_cfg.get("channels", 96)
-        decoder_channels = model_cfg.get("decoder_channels", [48, 24])
+        num_residual_blocks = arch_cfg.get(
+            "num_residual_blocks", model_cfg.get("num_residual_blocks", 10)
+        )
+        channels = arch_cfg.get("channels", model_cfg.get("channels", 96))
+        decoder_channels = arch_cfg.get(
+            "decoder_channels", model_cfg.get("decoder_channels", [48, 24])
+        )
         return SRResNetFaceParsingV2(
             num_classes=num_classes,
             num_residual_blocks=num_residual_blocks,

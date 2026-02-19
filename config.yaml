@@ -22,8 +22,7 @@ visualization:
 
 # Model training settings
 training:
-  # image_size: 512
-  image_size: 256
+  image_size: 512
   batch_size: 4
   num_epochs: 100
   learning_rate: 0.001
@@ -38,6 +37,10 @@ model:
   name: "srresnet_v2"
   num_classes: 19  # CelebAMask-HQ has 19 classes
   max_params: 1821085
-  num_residual_blocks: 10
-  channels: 90
-  decoder_channels: [45, 22]
+  arch_configs:
+    srresnet:
+      num_residual_blocks: 8
+    srresnet_v2:
+      num_residual_blocks: 10
+      channels: 90
+      decoder_channels: [45, 22]
