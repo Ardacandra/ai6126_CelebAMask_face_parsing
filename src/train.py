@@ -1,5 +1,6 @@
 import os
 import warnings
+from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -46,9 +47,13 @@ def main():
             f.write("epoch,train_loss,val_loss\n")
 
     def log(message):
-        print(message)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        message_with_time = f"[{timestamp}] {message}"
+        print(message_with_time)
         with open(log_file, "a") as f:
-            f.write(message + "\n")
+            f.write(message_with_time + "\n")
+
+    log("Training started")
 
     image_size = config["training"]["image_size"]
     batch_size = config["training"]["batch_size"]
@@ -203,6 +208,7 @@ def main():
 
     log("\n" + "=" * 60)
     log("Training Complete!")
+    log("Training ended")
     log("=" * 60)
 
 

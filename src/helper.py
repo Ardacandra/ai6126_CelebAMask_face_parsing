@@ -15,10 +15,11 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from model import SRResNetFaceParsing
+from model import SRResNetFaceParsing, SRResNetFaceParsingV2
 
 MODEL_REGISTRY = {
     "srresnet": SRResNetFaceParsing,
+    "srresnet_v2": SRResNetFaceParsingV2,
 }
 
 
@@ -47,6 +48,17 @@ def create_model(config):
 
     if model_name == "srresnet":
         return SRResNetFaceParsing(num_classes=num_classes)
+
+    if model_name == "srresnet_v2":
+        num_residual_blocks = model_cfg.get("num_residual_blocks", 10)
+        channels = model_cfg.get("channels", 96)
+        decoder_channels = model_cfg.get("decoder_channels", [48, 24])
+        return SRResNetFaceParsingV2(
+            num_classes=num_classes,
+            num_residual_blocks=num_residual_blocks,
+            channels=channels,
+            decoder_channels=tuple(decoder_channels),
+        )
 
     raise ValueError(f"Unsupported model name: {model_name}")
 
