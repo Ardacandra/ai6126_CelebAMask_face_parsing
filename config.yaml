@@ -11,7 +11,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "srresnet_baseline"
+  run_id: "srr_bsln_is_512_bs_4_ep_100_lr_1e-4"
 
 # Visualization settings
 visualization:
@@ -23,13 +23,13 @@ visualization:
 # Model training settings
 training:
   image_size: 512
-  batch_size: 2
-  num_epochs: 30
-  learning_rate: 0.001
-  checkpoint_every: 5
+  batch_size: 4
+  num_epochs: 100
+  learning_rate: 0.0001
+  checkpoint_every: 10
   val_split: 0.1
   split_seed: 42
-  patience: 5
+  patience: 10
   use_class_weights: true  # Handle class imbalance
 
 # Model settings
