@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 
 from helper import (
     CelebAMaskDataset,
-    compute_class_weights,
     create_model,
     custom_collate_fn,
     count_parameters,
@@ -137,15 +136,7 @@ def main():
     else:
         log(f"✓ Model parameters within limit ({trainable_params:,} < {max_params:,})")
 
-    # Compute class weights if enabled
-    use_class_weights = config["training"].get("use_class_weights", False)
-    class_weights = None
-    if use_class_weights:
-        class_weights = compute_class_weights(train_dataset, num_classes=19, device=device)
-        criterion = nn.CrossEntropyLoss(weight=class_weights)
-        log("\n✓ Using weighted CrossEntropyLoss to handle class imbalance")
-    else:
-        criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss()
     
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(

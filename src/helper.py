@@ -173,45 +173,6 @@ def count_parameters(model):
     return total_params, trainable_params
 
 
-def compute_class_weights(dataset, num_classes=19, device='cpu'):
-    """Compute class weights for handling imbalanced data"""
-    print("\nComputing class weights from dataset...")
-    class_counts = np.zeros(num_classes, dtype=np.int64)
-    
-    # Sample masks to compute class distribution
-    sample_size = min(len(dataset), 500)
-    indices = np.random.choice(len(dataset), sample_size, replace=False)
-    
-    for idx in tqdm(indices, desc="Sampling class distribution"):
-        _, mask, _ = dataset[idx]
-        if mask is not None:
-            mask_np = mask.numpy().astype(int).flatten()
-            for class_id in range(num_classes):
-                class_counts[class_id] += (mask_np == class_id).sum()
-    
-    # Compute inverse frequency weights
-    total_pixels = class_counts.sum()
-    class_weights = np.zeros(num_classes, dtype=np.float32)
-    
-    for i in range(num_classes):
-        if class_counts[i] > 0:
-            # Inverse frequency with smoothing
-            class_weights[i] = total_pixels / (num_classes * class_counts[i])
-        else:
-            class_weights[i] = 0.0
-    
-    # Normalize weights
-    class_weights = class_weights / class_weights.sum() * num_classes
-    
-    print("Class weights computed:")
-    for i in range(num_classes):
-        if class_counts[i] > 0:
-            pct = 100.0 * class_counts[i] / total_pixels
-            print(f"  Class {i:2d}: weight={class_weights[i]:.3f} (freq={pct:.2f}%)")
-    
-    return torch.FloatTensor(class_weights).to(device)
-
-
 def train_epoch(model, dataloader, criterion, optimizer, device):
     model.train()
     total_loss = 0
