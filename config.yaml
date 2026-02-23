@@ -11,7 +11,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "srr_bsln_v4"
+  run_id: "srr_bsln_v4_no_aug"
 
 # Visualization settings
 visualization:

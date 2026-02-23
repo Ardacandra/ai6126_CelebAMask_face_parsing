@@ -96,7 +96,13 @@ def read_latest_run_id(output_root):
 
 
 class CelebAMaskDataset(Dataset):
-    def __init__(self, images_dir, masks_dir=None, image_size=512, is_train=True):
+    def __init__(
+        self,
+        images_dir,
+        masks_dir=None,
+        image_size=512,
+        is_train=True,
+    ):
         self.images_dir = images_dir
         self.masks_dir = masks_dir
         self.image_size = image_size
@@ -105,21 +111,12 @@ class CelebAMaskDataset(Dataset):
 
         self.image_files = sorted([f for f in os.listdir(images_dir) if f.endswith(".jpg")])
 
-        if is_train:
-            self.image_transform = transforms.Compose([
-                transforms.Resize((image_size, image_size)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                   std=[0.229, 0.224, 0.225])
-            ])
-        else:
-            self.image_transform = transforms.Compose([
-                transforms.Resize((image_size, image_size)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                   std=[0.229, 0.224, 0.225])
-            ])
+        self.image_transform = transforms.Compose([
+            transforms.Resize((image_size, image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                std=[0.229, 0.224, 0.225])
+        ])
 
         self.mask_transform = transforms.Resize((image_size, image_size), interpolation=Image.NEAREST)
 

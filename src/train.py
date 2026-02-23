@@ -67,9 +67,12 @@ def main():
     log(f"Run ID: {run_id}")
     log(f"Output dir: {run_dir}")
 
+    train_images_dir = config["data"]["train"]["images"]
+    train_masks_dir = config["data"]["train"]["masks"]
+
     train_dataset = CelebAMaskDataset(
-        config["data"]["train"]["images"],
-        config["data"]["train"]["masks"],
+        train_images_dir,
+        train_masks_dir,
         image_size=image_size,
         is_train=True,
     )
@@ -114,6 +117,8 @@ def main():
     log("\nDataset Info:")
     log(f"  Train samples: {len(train_dataset)}")
     log(f"  Val samples: {len(val_dataset) if val_dataset is not None else 0}")
+    log(f"  Train images dir: {train_images_dir}")
+    log(f"  Train masks dir: {train_masks_dir}")
     log(f"  Image size: {image_size}x{image_size}")
     log(f"  Batch size: {batch_size}")
 
