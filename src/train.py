@@ -137,11 +137,25 @@ def main():
         log(f"✓ Model parameters within limit ({trainable_params:,} < {max_params:,})")
 
     criterion = nn.CrossEntropyLoss()
-    
+
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=5
-    )
+    scheduler = None
+    scheduler_cfg = config["training"].get("scheduler", {})
+    scheduler_enabled = scheduler_cfg.get("enabled", True)
+    if scheduler_enabled:
+        scheduler_type = scheduler_cfg.get("type", "reduce_on_plateau").lower()
+        if scheduler_type == "reduce_on_plateau":
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode=scheduler_cfg.get("mode", "min"),
+                factor=scheduler_cfg.get("factor", 0.5),
+                patience=scheduler_cfg.get("patience", 5),
+                min_lr=scheduler_cfg.get("min_lr", 1e-6),
+            )
+        else:
+            log(
+                f"\nWarning: Unsupported scheduler type '{scheduler_type}'. Continuing without scheduler."
+            )
 
     checkpoint_every = config["training"].get("checkpoint_every", 1)
     patience = config["training"].get("patience", 10)
@@ -150,6 +164,16 @@ def main():
     log(f"  Epochs: {num_epochs}")
     log(f"  Learning rate: {learning_rate}")
     log(f"  Device: {device}")
+    if scheduler is None:
+        log("  LR scheduler: disabled")
+    else:
+        log(
+            "  LR scheduler: ReduceLROnPlateau "
+            f"(mode={scheduler_cfg.get('mode', 'min')}, "
+            f"factor={scheduler_cfg.get('factor', 0.5)}, "
+            f"patience={scheduler_cfg.get('patience', 5)}, "
+            f"min_lr={scheduler_cfg.get('min_lr', 1e-6)})"
+        )
     log(f"  Checkpoint every: {checkpoint_every} epoch(s)")
     log(f"  Early stopping patience: {patience}")
     log("\n" + "=" * 60)
@@ -170,7 +194,8 @@ def main():
             with open(metrics_file, "a") as f:
                 f.write(f"{epoch + 1},{train_loss:.20f},{val_loss:.20f}\n")
 
-            scheduler.step(val_loss)
+            if scheduler is not None:
+                scheduler.step(val_loss)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -191,6 +216,9 @@ def main():
 
             with open(metrics_file, "a") as f:
                 f.write(f"{epoch + 1},{train_loss:.20f},\n")
+
+            if scheduler is not None:
+                scheduler.step(train_loss)
 
         if checkpoint_every > 0 and (epoch + 1) % checkpoint_every == 0:
             checkpoint_path = os.path.join(checkpoint_dir, f"epoch_{epoch + 1}.pth")

@@ -11,7 +11,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "srr_bsln_cw_false_is_512_bs_2_ep_100_lr_1e-4"
+  run_id: "srr_bsln_v4"
 
 # Visualization settings
 visualization:
@@ -23,13 +23,20 @@ visualization:
 # Model training settings
 training:
   image_size: 512
-  batch_size: 2
+  batch_size: 4
   num_epochs: 100
-  learning_rate: 0.0001
+  learning_rate: 0.001
+  scheduler:
+    enabled: true
+    type: "reduce_on_plateau"
+    mode: "min"
+    factor: 0.5
+    patience: 5
+    min_lr: 0.000001
   checkpoint_every: 10
   val_split: 0.1
   split_seed: 42
-  patience: 10
+  patience: 20
 
 # Model settings
 model:
