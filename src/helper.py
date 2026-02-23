@@ -1,5 +1,6 @@
 import os
 import sys
+import random
 from pathlib import Path
 from datetime import datetime
 import yaml
@@ -264,16 +265,47 @@ def split_train_val(dataset, val_split=0.2, seed=42):
         raise ValueError("val_split must be between 0 and 1")
 
     num_samples = len(dataset)
-    val_size = int(num_samples * val_split)
-    if val_size < 1:
-        val_size = 1
-    if val_size >= num_samples:
-        val_size = num_samples - 1
+    if num_samples < 2:
+        raise ValueError("Need at least 2 samples to split into train/val")
 
-    generator = torch.Generator()
-    generator.manual_seed(seed)
-    indices = torch.randperm(num_samples, generator=generator).tolist()
-    val_indices = indices[:val_size]
-    train_indices = indices[val_size:]
+    image_files = getattr(dataset, "image_files", None)
+    if image_files is None or len(image_files) != num_samples:
+        raise ValueError("Dataset must expose image_files for group-aware splitting")
+
+    target_val_size = int(num_samples * val_split)
+    if target_val_size < 1:
+        target_val_size = 1
+    if target_val_size >= num_samples:
+        target_val_size = num_samples - 1
+
+    grouped_indices = {}
+    for index, image_file in enumerate(image_files):
+        stem = Path(image_file).stem
+        group_key = stem.split("__", 1)[0]
+        grouped_indices.setdefault(group_key, []).append(index)
+
+    group_keys = list(grouped_indices.keys())
+    random.Random(seed).shuffle(group_keys)
+
+    val_indices = []
+    for group_key in group_keys:
+        candidate = grouped_indices[group_key]
+        if len(val_indices) >= target_val_size:
+            break
+        if len(val_indices) + len(candidate) >= num_samples:
+            continue
+        val_indices.extend(candidate)
+
+    if not val_indices:
+        first_group = grouped_indices[group_keys[0]]
+        if len(first_group) >= num_samples:
+            raise ValueError("Unable to create leakage-free split: all samples belong to one group")
+        val_indices = list(first_group)
+
+    val_indices_set = set(val_indices)
+    train_indices = [idx for idx in range(num_samples) if idx not in val_indices_set]
+
+    if not train_indices:
+        raise ValueError("Unable to create leakage-free split with non-empty train set")
 
     return Subset(dataset, train_indices), Subset(dataset, val_indices)

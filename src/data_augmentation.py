@@ -50,10 +50,10 @@ def geometric_translate(image, mask, dx, dy):
 
 def build_augmentations():
     return [
-        ("hflip", lambda image, mask: (TF.hflip(image), TF.hflip(mask))),
-        ("rot_p15", lambda image, mask: geometric_rotate(image, mask, angle=15.0)),
-        ("rot_m15", lambda image, mask: geometric_rotate(image, mask, angle=-15.0)),
-        ("translate_x20", lambda image, mask: geometric_translate(image, mask, dx=20, dy=0)),
+        # ("hflip", lambda image, mask: (TF.hflip(image), TF.hflip(mask))),
+        # ("rot_p15", lambda image, mask: geometric_rotate(image, mask, angle=15.0)),
+        # ("rot_m15", lambda image, mask: geometric_rotate(image, mask, angle=-15.0)),
+        # ("translate_x20", lambda image, mask: geometric_translate(image, mask, dx=20, dy=0)),
         ("brightness_up", lambda image, mask: (TF.adjust_brightness(image, 1.2), mask)),
         ("contrast_up", lambda image, mask: (TF.adjust_contrast(image, 1.2), mask)),
     ]
