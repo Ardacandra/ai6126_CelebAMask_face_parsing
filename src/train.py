@@ -69,6 +69,12 @@ def main():
 
     train_images_dir = config["data"]["train"]["images"]
     train_masks_dir = config["data"]["train"]["masks"]
+    aug_cfg = config.get("data", {}).get("augmentation", {})
+    use_train_aug = aug_cfg.get("use_train_aug", False)
+    if use_train_aug:
+        train_aug_cfg = aug_cfg.get("train_aug", {})
+        train_images_dir = train_aug_cfg.get("images", train_images_dir)
+        train_masks_dir = train_aug_cfg.get("masks", train_masks_dir)
 
     train_dataset = CelebAMaskDataset(
         train_images_dir,
@@ -117,6 +123,7 @@ def main():
     log("\nDataset Info:")
     log(f"  Train samples: {len(train_dataset)}")
     log(f"  Val samples: {len(val_dataset) if val_dataset is not None else 0}")
+    log(f"  Using augmented train data: {use_train_aug}")
     log(f"  Train images dir: {train_images_dir}")
     log(f"  Train masks dir: {train_masks_dir}")
     log(f"  Image size: {image_size}x{image_size}")

@@ -52,19 +52,38 @@ python visualize_samples.py
 ### Training and Evaluation
 
 1. Set `output.run_id`, `model.name`, and other training hyperparameters in `config.yaml`.
-2. Train:
+2. (Optional) Generate augmented dataset :
+
+```bash
+python src/data_augmentation.py
+```
+
+This creates:
+
+- `data/train_aug/images/*.jpg`
+- `data/train_aug/masks/*.png`
+
+To train using the augmented dataset, set this in `config.yaml`:
+
+```yaml
+data:
+    augmentation:
+        use_train_aug: true
+```
+
+3. Train:
 
 ```bash
 python src/train.py
 ```
 
-3. Generate validation predictions:
+4. Generate validation predictions:
 
 ```bash
 python src/evaluate.py
 ```
 
-4. Prepare submission package (matches `data/sample-submission/masks` format):
+5. Prepare submission package (matches `data/sample-submission/masks` format):
 
 ```bash
 python prepare_submission.py

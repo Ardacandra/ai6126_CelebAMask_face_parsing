@@ -5,13 +5,18 @@ data:
   train:
     images: "data/train/images"
     masks: "data/train/masks"
+  augmentation:
+    use_train_aug: true
+    train_aug:
+      images: "data/train_aug/images"
+      masks: "data/train_aug/masks"
   val:
     images: "data/val/images"
 
 # Output directory
 output:
   dir: "out"
-  run_id: "srr_bsln_v4_no_aug"
+  run_id: "srr_bsln_v4_aug_20_ep"
 
 # Visualization settings
 visualization:
@@ -24,7 +29,7 @@ visualization:
 training:
   image_size: 512
   batch_size: 4
-  num_epochs: 100
+  num_epochs: 20
   learning_rate: 0.001
   scheduler:
     enabled: true
