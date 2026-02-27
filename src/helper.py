@@ -6,6 +6,7 @@ from datetime import datetime
 import yaml
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import Dataset, Subset
 from torchvision import transforms
 from PIL import Image
@@ -21,6 +22,130 @@ from model import SRResNetBaseline
 MODEL_REGISTRY = {
     "srresnet_baseline": SRResNetBaseline,
 }
+
+
+class DiceLoss(nn.Module):
+    def __init__(self, smooth=1.0, ignore_index=None):
+        super().__init__()
+        self.smooth = smooth
+        self.ignore_index = ignore_index
+
+    def forward(self, logits, targets):
+        num_classes = logits.shape[1]
+        probs = torch.softmax(logits, dim=1)
+        targets = targets.long()
+
+        clamped_targets = torch.clamp(targets, min=0, max=num_classes - 1)
+        one_hot = F.one_hot(clamped_targets, num_classes=num_classes).permute(0, 3, 1, 2).float()
+
+        if self.ignore_index is not None:
+            valid_mask = (targets != self.ignore_index).unsqueeze(1).float()
+            probs = probs * valid_mask
+            one_hot = one_hot * valid_mask
+
+        dims = (0, 2, 3)
+        intersection = (probs * one_hot).sum(dim=dims)
+        denominator = probs.sum(dim=dims) + one_hot.sum(dim=dims)
+        dice = (2.0 * intersection + self.smooth) / (denominator + self.smooth)
+        return 1.0 - dice.mean()
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1.0, gamma=2.0, ignore_index=None, class_weights=None):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.ignore_index = ignore_index
+        if class_weights is None:
+            self.class_weights = None
+        else:
+            self.register_buffer("class_weights", torch.tensor(class_weights, dtype=torch.float32))
+
+    def forward(self, logits, targets):
+        targets = targets.long()
+        ignore_index = self.ignore_index if self.ignore_index is not None else -100
+        ce_loss = F.cross_entropy(
+            logits,
+            targets,
+            reduction="none",
+            weight=self.class_weights,
+            ignore_index=ignore_index,
+        )
+        pt = torch.exp(-ce_loss)
+        loss = self.alpha * ((1.0 - pt) ** self.gamma) * ce_loss
+
+        if self.ignore_index is not None:
+            valid_mask = targets != self.ignore_index
+            loss = loss[valid_mask]
+
+        if loss.numel() == 0:
+            return ce_loss.mean() * 0.0
+        return loss.mean()
+
+
+class BoundaryAwareLoss(nn.Module):
+    def __init__(
+        self,
+        ce_weight=1.0,
+        boundary_weight=1.0,
+        dilation=3,
+        ignore_index=None,
+        class_weights=None,
+    ):
+        super().__init__()
+        self.ce_weight = ce_weight
+        self.boundary_weight = boundary_weight
+        self.dilation = max(1, int(dilation))
+        self.ignore_index = ignore_index
+
+        ce_ignore_index = self.ignore_index if self.ignore_index is not None else -100
+        ce_class_weights = None
+        if class_weights is not None:
+            ce_class_weights = torch.tensor(class_weights, dtype=torch.float32)
+        self.ce = nn.CrossEntropyLoss(weight=ce_class_weights, ignore_index=ce_ignore_index)
+
+    def _target_boundaries(self, targets):
+        edge_x = (targets[:, :, 1:] != targets[:, :, :-1]).float()
+        edge_x = F.pad(edge_x, (0, 1, 0, 0))
+        edge_y = (targets[:, 1:, :] != targets[:, :-1, :]).float()
+        edge_y = F.pad(edge_y, (0, 0, 0, 1))
+        boundaries = torch.clamp(edge_x + edge_y, 0.0, 1.0)
+
+        if self.dilation > 1:
+            boundaries = F.max_pool2d(
+                boundaries.unsqueeze(1),
+                kernel_size=self.dilation,
+                stride=1,
+                padding=self.dilation // 2,
+            ).squeeze(1)
+        return boundaries
+
+    def _predicted_boundaries(self, probs):
+        grad_x = torch.abs(probs[:, :, :, 1:] - probs[:, :, :, :-1])
+        grad_x = F.pad(grad_x, (0, 1, 0, 0))
+        grad_y = torch.abs(probs[:, :, 1:, :] - probs[:, :, :-1, :])
+        grad_y = F.pad(grad_y, (0, 0, 0, 1))
+        edge_strength = (grad_x.mean(dim=1) + grad_y.mean(dim=1)).clamp(0.0, 1.0)
+        return edge_strength
+
+    def forward(self, logits, targets):
+        targets = targets.long()
+        ce_loss = self.ce(logits, targets)
+
+        probs = torch.softmax(logits, dim=1)
+        pred_edges = self._predicted_boundaries(probs)
+        target_edges = self._target_boundaries(targets)
+
+        if self.ignore_index is not None:
+            valid_mask = (targets != self.ignore_index).float()
+            pred_edges = pred_edges * valid_mask
+            target_edges = target_edges * valid_mask
+            valid_count = valid_mask.sum().clamp_min(1.0)
+            boundary_loss = F.binary_cross_entropy(pred_edges, target_edges, reduction="sum") / valid_count
+        else:
+            boundary_loss = F.binary_cross_entropy(pred_edges, target_edges)
+
+        return self.ce_weight * ce_loss + self.boundary_weight * boundary_loss
 
 
 def get_project_root():
@@ -65,6 +190,65 @@ def create_model(config):
         )
 
     raise ValueError(f"Unsupported model name: {model_name}")
+
+
+def create_loss_fn(config):
+    loss_cfg = config.get("training", {}).get("loss", {})
+    loss_name = str(loss_cfg.get("name", "cross_entropy")).lower()
+    ignore_index = loss_cfg.get("ignore_index", None)
+    class_weights = loss_cfg.get("class_weights", None)
+
+    ce_aliases = {"cross_entropy", "cross-entropy", "ce"}
+    dice_aliases = {"dice", "dice_loss"}
+    focal_aliases = {"focal", "focal_loss"}
+    boundary_aliases = {"boundary", "boundary_aware", "boundary_aware_loss", "boundary-aware"}
+
+    if loss_name in ce_aliases:
+        ce_ignore_index = ignore_index if ignore_index is not None else -100
+        ce_weights = None
+        if class_weights is not None:
+            ce_weights = torch.tensor(class_weights, dtype=torch.float32)
+        return nn.CrossEntropyLoss(weight=ce_weights, ignore_index=ce_ignore_index), "cross_entropy"
+
+    if loss_name in dice_aliases:
+        dice_cfg = loss_cfg.get("dice", {})
+        return (
+            DiceLoss(
+                smooth=float(dice_cfg.get("smooth", 1.0)),
+                ignore_index=ignore_index,
+            ),
+            "dice",
+        )
+
+    if loss_name in focal_aliases:
+        focal_cfg = loss_cfg.get("focal", {})
+        return (
+            FocalLoss(
+                alpha=float(focal_cfg.get("alpha", 1.0)),
+                gamma=float(focal_cfg.get("gamma", 2.0)),
+                ignore_index=ignore_index,
+                class_weights=class_weights,
+            ),
+            "focal",
+        )
+
+    if loss_name in boundary_aliases:
+        boundary_cfg = loss_cfg.get("boundary_aware", {})
+        return (
+            BoundaryAwareLoss(
+                ce_weight=float(boundary_cfg.get("ce_weight", 1.0)),
+                boundary_weight=float(boundary_cfg.get("boundary_weight", 1.0)),
+                dilation=int(boundary_cfg.get("dilation", 3)),
+                ignore_index=ignore_index,
+                class_weights=class_weights,
+            ),
+            "boundary_aware",
+        )
+
+    raise ValueError(
+        "Unsupported training.loss.name: "
+        f"'{loss_name}'. Supported: cross_entropy, dice, focal, boundary_aware"
+    )
 
 
 def resolve_run_id(config, output_root, allow_generate=True):

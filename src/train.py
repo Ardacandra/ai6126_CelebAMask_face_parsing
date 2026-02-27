@@ -2,7 +2,6 @@ import os
 import warnings
 from datetime import datetime
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
@@ -20,6 +19,7 @@ from helper import (
     train_epoch,
     validate,
     write_latest_run_id,
+    create_loss_fn,
 )
 
 warnings.filterwarnings("ignore")
@@ -148,7 +148,8 @@ def main():
     else:
         log(f"✓ Model parameters within limit ({trainable_params:,} < {max_params:,})")
 
-    criterion = nn.CrossEntropyLoss()
+    criterion, loss_name = create_loss_fn(config)
+    criterion = criterion.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = None
@@ -175,6 +176,7 @@ def main():
     log("\nTraining Configuration:")
     log(f"  Epochs: {num_epochs}")
     log(f"  Learning rate: {learning_rate}")
+    log(f"  Loss: {loss_name}")
     log(f"  Device: {device}")
     if scheduler is None:
         log("  LR scheduler: disabled")
