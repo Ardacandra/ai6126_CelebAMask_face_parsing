@@ -148,6 +148,63 @@ class BoundaryAwareLoss(nn.Module):
         return self.ce_weight * ce_loss + self.boundary_weight * boundary_loss
 
 
+class CEDiceBoundaryLoss(nn.Module):
+    def __init__(
+        self,
+        ce_weight=1.0,
+        dice_weight=1.0,
+        boundary_weight=1.0,
+        dice_smooth=1.0,
+        dilation=3,
+        ignore_index=None,
+        class_weights=None,
+    ):
+        super().__init__()
+        self.ce_weight = ce_weight
+        self.dice_weight = dice_weight
+        self.boundary_weight = boundary_weight
+        self.ignore_index = ignore_index
+
+        ce_ignore_index = self.ignore_index if self.ignore_index is not None else -100
+        ce_weights = None
+        if class_weights is not None:
+            ce_weights = torch.tensor(class_weights, dtype=torch.float32)
+        self.ce = nn.CrossEntropyLoss(weight=ce_weights, ignore_index=ce_ignore_index)
+        self.dice = DiceLoss(smooth=dice_smooth, ignore_index=ignore_index)
+        self.boundary_helper = BoundaryAwareLoss(
+            ce_weight=0.0,
+            boundary_weight=1.0,
+            dilation=dilation,
+            ignore_index=ignore_index,
+            class_weights=class_weights,
+        )
+
+    def forward(self, logits, targets):
+        targets = targets.long()
+
+        ce_loss = self.ce(logits, targets)
+        dice_loss = self.dice(logits, targets)
+
+        probs = torch.softmax(logits, dim=1)
+        pred_edges = self.boundary_helper._predicted_boundaries(probs)
+        target_edges = self.boundary_helper._target_boundaries(targets)
+
+        if self.ignore_index is not None:
+            valid_mask = (targets != self.ignore_index).float()
+            pred_edges = pred_edges * valid_mask
+            target_edges = target_edges * valid_mask
+            valid_count = valid_mask.sum().clamp_min(1.0)
+            boundary_loss = F.binary_cross_entropy(pred_edges, target_edges, reduction="sum") / valid_count
+        else:
+            boundary_loss = F.binary_cross_entropy(pred_edges, target_edges)
+
+        return (
+            self.ce_weight * ce_loss
+            + self.dice_weight * dice_loss
+            + self.boundary_weight * boundary_loss
+        )
+
+
 def get_project_root():
     return project_root
 
@@ -202,6 +259,12 @@ def create_loss_fn(config):
     dice_aliases = {"dice", "dice_loss"}
     focal_aliases = {"focal", "focal_loss"}
     boundary_aliases = {"boundary", "boundary_aware", "boundary_aware_loss", "boundary-aware"}
+    ce_dice_boundary_aliases = {
+        "ce_dice_boundary",
+        "cross_entropy_dice_boundary",
+        "cross_entropy+dice+boundary_aware",
+        "combo",
+    }
 
     if loss_name in ce_aliases:
         ce_ignore_index = ignore_index if ignore_index is not None else -100
@@ -245,9 +308,24 @@ def create_loss_fn(config):
             "boundary_aware",
         )
 
+    if loss_name in ce_dice_boundary_aliases:
+        combo_cfg = loss_cfg.get("ce_dice_boundary", {})
+        return (
+            CEDiceBoundaryLoss(
+                ce_weight=float(combo_cfg.get("ce_weight", 1.0)),
+                dice_weight=float(combo_cfg.get("dice_weight", 1.0)),
+                boundary_weight=float(combo_cfg.get("boundary_weight", 1.0)),
+                dice_smooth=float(combo_cfg.get("dice_smooth", 1.0)),
+                dilation=int(combo_cfg.get("dilation", 5)),
+                ignore_index=ignore_index,
+                class_weights=class_weights,
+            ),
+            "ce_dice_boundary",
+        )
+
     raise ValueError(
         "Unsupported training.loss.name: "
-        f"'{loss_name}'. Supported: cross_entropy, dice, focal, boundary_aware"
+        f"'{loss_name}'. Supported: cross_entropy, dice, focal, boundary_aware, ce_dice_boundary"
     )
 
 

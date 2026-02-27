@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "srr_bsln_v4_aug_v3_dice"
+  run_id: "srr_bsln_v4_aug_v3_cdb_loss"
 
 # Visualization settings
 visualization:
@@ -32,7 +32,7 @@ training:
   num_epochs: 40
   learning_rate: 0.001
   loss:
-    name: "dice"  # cross_entropy | dice | focal | boundary_aware
+    name: "ce_dice_boundary"  # cross_entropy | dice | focal | boundary_aware | ce_dice_boundary
     ignore_index: null
     class_weights: null  # Set per-class weights here when using cross_entropy/focal/boundary_aware
     dice:
@@ -43,6 +43,12 @@ training:
     boundary_aware:
       ce_weight: 1.0
       boundary_weight: 2.0
+      dilation: 5
+    ce_dice_boundary:
+      ce_weight: 1.0
+      dice_weight: 1.0
+      boundary_weight: 1.5
+      dice_smooth: 1.0
       dilation: 5
   scheduler:
     enabled: true
