@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "lfp_v1"
+  run_id: "lfp_v2"
 
 # Visualization settings
 visualization:
@@ -29,7 +29,7 @@ visualization:
 training:
   image_size: 512
   batch_size: 4
-  num_epochs: 30
+  num_epochs: 100
   learning_rate: 0.001
   loss:
     name: "ce_dice_boundary"  # cross_entropy | dice | focal | boundary_aware | ce_dice_boundary
@@ -70,10 +70,10 @@ model:
   max_params: 1821085
   arch_configs:
     lite_face_parser:
-      stage_channels: [40, 64, 96, 144]
+      stage_channels: [48, 72, 108, 160]
       expand_ratio: 4
       aspp_dilations: [1, 2, 4]
-      aspp_channels: 96
+      aspp_channels: 112
     srresnet_baseline:
       num_residual_blocks: 16
       context_dilations: [2, 4, 8]
