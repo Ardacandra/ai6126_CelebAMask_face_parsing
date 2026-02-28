@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "srr_bsln_v4_aug_v3_cdb_loss"
+  run_id: "lfp_v1"
 
 # Visualization settings
 visualization:
@@ -29,7 +29,7 @@ visualization:
 training:
   image_size: 512
   batch_size: 4
-  num_epochs: 40
+  num_epochs: 30
   learning_rate: 0.001
   loss:
     name: "ce_dice_boundary"  # cross_entropy | dice | focal | boundary_aware | ce_dice_boundary
@@ -64,10 +64,16 @@ training:
 
 # Model settings
 model:
-  name: "srresnet_baseline"
+  # name: "srresnet_baseline"
+  name: "lite_face_parser"
   num_classes: 19  # CelebAMask-HQ has 19 classes
   max_params: 1821085
   arch_configs:
+    lite_face_parser:
+      stage_channels: [40, 64, 96, 144]
+      expand_ratio: 4
+      aspp_dilations: [1, 2, 4]
+      aspp_channels: 96
     srresnet_baseline:
       num_residual_blocks: 16
       context_dilations: [2, 4, 8]

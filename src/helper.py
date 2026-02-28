@@ -17,10 +17,11 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from model import SRResNetBaseline
+from model import LiteFaceParser, SRResNetBaseline
 
 MODEL_REGISTRY = {
     "srresnet_baseline": SRResNetBaseline,
+    "lite_face_parser": LiteFaceParser,
 }
 
 
@@ -244,6 +245,27 @@ def create_model(config):
             num_residual_blocks=num_residual_blocks,
             context_dilations=tuple(context_dilations),
             decoder_channels=tuple(decoder_channels),
+        )
+
+    if model_name == "lite_face_parser":
+        stage_channels = arch_cfg.get(
+            "stage_channels", model_cfg.get("stage_channels", [32, 48, 64, 96])
+        )
+        expand_ratio = arch_cfg.get(
+            "expand_ratio", model_cfg.get("expand_ratio", 4)
+        )
+        aspp_dilations = arch_cfg.get(
+            "aspp_dilations", model_cfg.get("aspp_dilations", [1, 2, 4])
+        )
+        aspp_channels = arch_cfg.get(
+            "aspp_channels", model_cfg.get("aspp_channels", 64)
+        )
+        return LiteFaceParser(
+            num_classes=num_classes,
+            stage_channels=tuple(stage_channels),
+            expand_ratio=expand_ratio,
+            aspp_dilations=tuple(aspp_dilations),
+            aspp_channels=aspp_channels,
         )
 
     raise ValueError(f"Unsupported model name: {model_name}")
