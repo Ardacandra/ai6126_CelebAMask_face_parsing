@@ -58,6 +58,8 @@ python visualize_samples.py
 python src/data_augmentation.py
 ```
 
+Each training image is assigned exactly one augmentation method in round-robin sequence (and the original sample is also kept).
+
 This creates:
 
 - `data/train_aug/images/*.jpg`

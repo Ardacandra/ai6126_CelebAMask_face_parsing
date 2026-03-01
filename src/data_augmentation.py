@@ -1,6 +1,7 @@
 import argparse
 import random
 from pathlib import Path
+from collections import Counter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -51,12 +52,18 @@ def geometric_translate(image, mask, dx, dy):
 def build_augmentations():
     return [
         # ("hflip", lambda image, mask: (TF.hflip(image), TF.hflip(mask))),
-        # ("rot_p15", lambda image, mask: geometric_rotate(image, mask, angle=15.0)),
-        # ("rot_m15", lambda image, mask: geometric_rotate(image, mask, angle=-15.0)),
-        # ("translate_x20", lambda image, mask: geometric_translate(image, mask, dx=20, dy=0)),
-        ("brightness_up", lambda image, mask: (TF.adjust_brightness(image, 1.2), mask)),
+        ("rot_p15", lambda image, mask: geometric_rotate(image, mask, angle=15.0)),
+        ("rot_m15", lambda image, mask: geometric_rotate(image, mask, angle=-15.0)),
+        ("translate_x20", lambda image, mask: geometric_translate(image, mask, dx=20, dy=0)),
+        # ("brightness_up", lambda image, mask: (TF.adjust_brightness(image, 1.2), mask)),
         ("contrast_up", lambda image, mask: (TF.adjust_contrast(image, 1.2), mask)),
     ]
+
+
+def select_augmentation_for_index(index: int, augmentations):
+    if not augmentations:
+        raise ValueError("No augmentation methods configured.")
+    return augmentations[index % len(augmentations)]
 
 
 def save_mask(mask: Image.Image, save_path: Path):
@@ -141,6 +148,7 @@ def main():
     debug_records = []
     processed = 0
     skipped = 0
+    method_counts = Counter()
 
     for image_path in tqdm(image_files, desc="Generating augmented dataset"):
         mask_path = train_masks_dir / f"{image_path.stem}.png"
@@ -158,22 +166,23 @@ def main():
         image.save(original_image_out, quality=95)
         save_mask(mask, original_mask_out)
 
-        for method_name, method_fn in augmentations:
-            aug_image, aug_mask = method_fn(image, mask)
-            aug_image_out = out_images_dir / f"{base_name}__{method_name}.jpg"
-            aug_mask_out = out_masks_dir / f"{base_name}__{method_name}.png"
+        method_name, method_fn = select_augmentation_for_index(processed, augmentations)
+        aug_image, aug_mask = method_fn(image, mask)
+        aug_image_out = out_images_dir / f"{base_name}__{method_name}.jpg"
+        aug_mask_out = out_masks_dir / f"{base_name}__{method_name}.png"
 
-            aug_image.save(aug_image_out, quality=95)
-            save_mask(aug_mask, aug_mask_out)
+        aug_image.save(aug_image_out, quality=95)
+        save_mask(aug_mask, aug_mask_out)
 
-            debug_records.append(
-                {
-                    "image_path": str(aug_image_out),
-                    "mask_path": str(aug_mask_out),
-                    "source": image_path.name,
-                    "method": method_name,
-                }
-            )
+        debug_records.append(
+            {
+                "image_path": str(aug_image_out),
+                "mask_path": str(aug_mask_out),
+                "source": image_path.name,
+                "method": method_name,
+            }
+        )
+        method_counts[method_name] += 1
 
         processed += 1
 
@@ -191,6 +200,10 @@ def main():
     print(f"Skipped (missing mask): {skipped}")
     print(f"Output images: {total_output_images} -> {out_images_dir}")
     print(f"Output masks: {total_output_masks} -> {out_masks_dir}")
+    if method_counts:
+        print("Assigned augmentation counts:")
+        for method_name, count in sorted(method_counts.items()):
+            print(f"  {method_name}: {count}")
     if plot_path is not None:
         print(f"Debug plot saved to: {plot_path}")
 

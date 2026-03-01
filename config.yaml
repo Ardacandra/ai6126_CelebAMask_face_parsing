@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "lfp_v2"
+  run_id: "lfp_v3"
 
 # Visualization settings
 visualization:
