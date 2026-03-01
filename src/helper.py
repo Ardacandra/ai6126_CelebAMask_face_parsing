@@ -474,10 +474,47 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
     return total_loss / len(dataloader)
 
 
-def validate(model, dataloader, criterion, device):
+def _update_confusion_matrix(confusion, predictions, targets, num_classes, ignore_index=None):
+    predictions = predictions.view(-1)
+    targets = targets.view(-1)
+
+    if ignore_index is not None:
+        valid = targets != ignore_index
+        predictions = predictions[valid]
+        targets = targets[valid]
+
+    valid_range = (targets >= 0) & (targets < num_classes)
+    predictions = predictions[valid_range]
+    targets = targets[valid_range]
+
+    if targets.numel() == 0:
+        return
+
+    encoded = targets * num_classes + predictions
+    batch_confusion = torch.bincount(encoded, minlength=num_classes * num_classes)
+    confusion += batch_confusion.view(num_classes, num_classes)
+
+
+def _macro_f1_from_confusion(confusion):
+    true_positive = torch.diag(confusion)
+    false_positive = confusion.sum(dim=0) - true_positive
+    false_negative = confusion.sum(dim=1) - true_positive
+
+    denominator = 2 * true_positive + false_positive + false_negative
+    f1_per_class = torch.zeros_like(true_positive, dtype=torch.float64)
+    valid_classes = denominator > 0
+    f1_per_class[valid_classes] = (2 * true_positive[valid_classes]) / denominator[valid_classes]
+
+    if valid_classes.any():
+        return f1_per_class[valid_classes].mean().item()
+    return 0.0
+
+
+def validate(model, dataloader, criterion, device, return_f1=False, ignore_index=None):
     model.eval()
     total_loss = 0
     count = 0
+    confusion = None
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Validating"):
@@ -493,7 +530,30 @@ def validate(model, dataloader, criterion, device):
             total_loss += loss.item()
             count += 1
 
-    return total_loss / max(count, 1)
+            if return_f1:
+                predictions = torch.argmax(outputs, dim=1)
+                if confusion is None:
+                    num_classes = outputs.shape[1]
+                    confusion = torch.zeros(
+                        (num_classes, num_classes),
+                        device=device,
+                        dtype=torch.float64,
+                    )
+                _update_confusion_matrix(
+                    confusion,
+                    predictions,
+                    masks,
+                    num_classes=outputs.shape[1],
+                    ignore_index=ignore_index,
+                )
+
+    avg_loss = total_loss / max(count, 1)
+    if not return_f1:
+        return avg_loss
+
+    if confusion is None:
+        return avg_loss, 0.0
+    return avg_loss, _macro_f1_from_confusion(confusion)
 
 
 def generate_predictions(model, dataloader, output_dir, device, output_size=(512, 512)):

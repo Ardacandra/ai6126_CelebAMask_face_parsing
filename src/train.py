@@ -43,7 +43,7 @@ def main():
     metrics_file = os.path.join(run_dir, "metrics.csv")
     if not os.path.exists(metrics_file):
         with open(metrics_file, "w") as f:
-            f.write("epoch,train_loss,val_loss\n")
+            f.write("epoch,train_loss,val_loss,val_f1\n")
 
     def log(message):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -150,6 +150,7 @@ def main():
 
     criterion, loss_name = create_loss_fn(config)
     criterion = criterion.to(device)
+    ignore_index = config.get("training", {}).get("loss", {}).get("ignore_index", None)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = None
@@ -201,12 +202,20 @@ def main():
         train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
 
         if has_val_labels and val_loader is not None:
-            val_loss = validate(model, val_loader, criterion, device)
+            val_loss, val_f1 = validate(
+                model,
+                val_loader,
+                criterion,
+                device,
+                return_f1=True,
+                ignore_index=ignore_index,
+            )
             log(f"  Train Loss: {train_loss:.4f}")
             log(f"  Val Loss: {val_loss:.4f}")
+            log(f"  Val F1 (macro): {val_f1:.4f}")
 
             with open(metrics_file, "a") as f:
-                f.write(f"{epoch + 1},{train_loss:.20f},{val_loss:.20f}\n")
+                f.write(f"{epoch + 1},{train_loss:.20f},{val_loss:.20f},{val_f1:.20f}\n")
 
             if scheduler is not None:
                 scheduler.step(val_loss)
@@ -229,7 +238,7 @@ def main():
             log(f"  ✓ Model saved to {model_path}")
 
             with open(metrics_file, "a") as f:
-                f.write(f"{epoch + 1},{train_loss:.20f},\n")
+                f.write(f"{epoch + 1},{train_loss:.20f},,\n")
 
             if scheduler is not None:
                 scheduler.step(train_loss)
@@ -238,6 +247,22 @@ def main():
             checkpoint_path = os.path.join(checkpoint_dir, f"epoch_{epoch + 1}.pth")
             torch.save(model.state_dict(), checkpoint_path)
             log(f"  ✓ Checkpoint saved to {checkpoint_path}")
+
+    if has_val_labels and val_loader is not None:
+        model_path = os.path.join(run_dir, "best_model.pth")
+        if os.path.exists(model_path):
+            model.load_state_dict(torch.load(model_path, map_location=device))
+            final_val_loss, final_val_f1 = validate(
+                model,
+                val_loader,
+                criterion,
+                device,
+                return_f1=True,
+                ignore_index=ignore_index,
+            )
+            log("\nFinal Best Model Validation Metrics:")
+            log(f"  Val Loss: {final_val_loss:.4f}")
+            log(f"  Val F1 (macro): {final_val_f1:.4f}")
 
     log("\n" + "=" * 60)
     log("Training Complete!")
