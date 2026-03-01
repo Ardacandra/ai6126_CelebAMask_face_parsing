@@ -1,9 +1,10 @@
 import os
 import warnings
+from pathlib import Path
 from datetime import datetime
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from helper import (
     CelebAMaskDataset,
@@ -69,6 +70,8 @@ def main():
 
     train_images_dir = config["data"]["train"]["images"]
     train_masks_dir = config["data"]["train"]["masks"]
+    original_train_images_dir = train_images_dir
+    original_train_masks_dir = train_masks_dir
     aug_cfg = config.get("data", {}).get("augmentation", {})
     use_train_aug = aug_cfg.get("use_train_aug", False)
     if use_train_aug:
@@ -95,11 +98,41 @@ def main():
     if not has_val_labels:
         val_split = config["training"].get("val_split", 0.2)
         split_seed = config["training"].get("split_seed", 42)
-        train_dataset, val_dataset = split_train_val(
-            train_dataset, val_split=val_split, seed=split_seed
-        )
+        if use_train_aug:
+            original_dataset = CelebAMaskDataset(
+                original_train_images_dir,
+                original_train_masks_dir,
+                image_size=image_size,
+                is_train=False,
+            )
+            _, val_dataset = split_train_val(
+                original_dataset, val_split=val_split, seed=split_seed
+            )
+
+            val_group_keys = {
+                Path(original_dataset.image_files[idx]).stem.split("__", 1)[0]
+                for idx in val_dataset.indices
+            }
+            train_indices = [
+                idx
+                for idx, image_file in enumerate(train_dataset.image_files)
+                if Path(image_file).stem.split("__", 1)[0] not in val_group_keys
+            ]
+            if not train_indices:
+                raise ValueError(
+                    "No training samples left after excluding validation groups from augmented data"
+                )
+            train_dataset = Subset(train_dataset, train_indices)
+            log("\nVal labels not found; using original-only val split with augmentation-aware train filtering.")
+            log(f"  Original train samples for split: {len(original_dataset)}")
+            log(f"  Validation groups held out: {len(val_group_keys)}")
+            log(f"  Remaining train samples after filter: {len(train_dataset)}")
+        else:
+            train_dataset, val_dataset = split_train_val(
+                train_dataset, val_split=val_split, seed=split_seed
+            )
+            log("\nVal labels not found; using train/val split from training data.")
         has_val_labels = True
-        log("\nVal labels not found; using train/val split from training data.")
         log(f"  Val split: {val_split:.2f}")
         log(f"  Split seed: {split_seed}")
 
