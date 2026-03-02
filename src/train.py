@@ -1,4 +1,5 @@
 import os
+import argparse
 import warnings
 from pathlib import Path
 from datetime import datetime
@@ -26,8 +27,19 @@ from helper import (
 warnings.filterwarnings("ignore")
 
 
-def main():
-    config = load_config()
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train face parsing model")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to config YAML file (default: config.yaml at project root)",
+    )
+    return parser.parse_args()
+
+
+def main(config_path=None):
+    config = load_config(config_path=config_path)
     device = get_device()
     print(f"Using device: {device}")
 
@@ -304,4 +316,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(config_path=args.config)

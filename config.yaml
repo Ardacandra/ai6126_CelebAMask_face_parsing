@@ -29,7 +29,7 @@ visualization:
 training:
   image_size: 512
   batch_size: 4
-  num_epochs: 100
+  num_epochs: 30
   learning_rate: 0.001
   loss:
     name: "ce_dice_boundary"  # cross_entropy | dice | focal | boundary_aware | ce_dice_boundary

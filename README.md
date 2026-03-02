@@ -95,3 +95,29 @@ This creates:
 
 - `out/<run_id>/submission/masks/*.png`
 - `out/<run_id>/<run_id>_submission.zip`
+
+### Grid Search
+
+Use `grid_search.py` to run multiple training combinations in one command. It varies:
+
+- `training.image_size`
+- `training.batch_size`
+- `training.learning_rate`
+- `training.scheduler` (`reduce_on_plateau` or `none`)
+- `training.loss.ce_dice_boundary` weights/params
+
+Example:
+
+```bash
+python grid_search.py \
+    --image-sizes 384,512 \
+    --batch-sizes 4,8 \
+    --learning-rates 0.001,0.0005 \
+    --schedulers reduce_on_plateau,none \
+    --ce-weights 1.0 \
+    --dice-weights 1.0 \
+    --boundary-weights 1.0,1.5 \
+    --dilations 3,5 \
+    --dice-smooth-values 1.0 \
+    --skip-completed
+```
