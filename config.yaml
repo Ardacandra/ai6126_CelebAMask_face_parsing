@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "lfp_v3"
+  run_id: "lfp_v4"
 
 # Visualization settings
 visualization:
@@ -30,7 +30,7 @@ training:
   image_size: 512
   batch_size: 4
   num_epochs: 30
-  learning_rate: 0.001
+  learning_rate: 0.0005
   loss:
     name: "ce_dice_boundary"  # cross_entropy | dice | focal | boundary_aware | ce_dice_boundary
     ignore_index: null
