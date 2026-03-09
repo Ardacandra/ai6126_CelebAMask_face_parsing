@@ -96,6 +96,14 @@ This creates:
 - `out/<run_id>/submission/masks/*.png`
 - `out/<run_id>/<run_id>_submission.zip`
 
+6. (Optional) Apply postprocessing from `config.yaml` (`postprocessing.method`):
+
+```bash
+python src/postprocessing.py
+```
+
+This creates `out/<run_id>/submission_<method>/masks/*.png` and `out/<run_id>/<run_id>_post_<method>_submission.zip`.
+
 ### Grid Search
 
 Use `grid_search.py` to run multiple training combinations in one command. It varies:

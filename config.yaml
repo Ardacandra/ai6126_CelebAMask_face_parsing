@@ -78,3 +78,23 @@ model:
       num_residual_blocks: 16
       context_dilations: [2, 4, 8]
       decoder_channels: [64, 48, 32]
+
+# Postprocessing settings (used by src/postprocessing.py)
+postprocessing:
+  # Options: small_component_removal | majority_filter_3x3 | dense_crf | combined_all
+  method: "combined_all"
+  small_component_removal:
+    min_size_default: 32
+    # Optional per-class overrides, class id as string.
+    # Example: {"4": 16, "5": 16, "6": 12, "7": 12}
+    min_size_by_class: {}
+  dense_crf:
+    # Used by combined_all. For method=dense_crf, CRF is always applied.
+    enabled: false
+    iterations: 5
+    unary_confidence: 0.9
+    gaussian_sxy: 3
+    gaussian_compat: 3
+    bilateral_sxy: 50
+    bilateral_srgb: 13
+    bilateral_compat: 10
