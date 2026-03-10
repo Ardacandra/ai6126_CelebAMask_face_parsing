@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "lfp_v4"
+  run_id: "lfp_arch_v2"
 
 # Visualization settings
 visualization:
@@ -65,7 +65,8 @@ training:
 # Model settings
 model:
   # name: "srresnet_baseline"
-  name: "lite_face_parser"
+  # name: "lite_face_parser"
+  name: "lite_face_parser_v2"
   num_classes: 19  # CelebAMask-HQ has 19 classes
   max_params: 1821085
   arch_configs:
@@ -74,6 +75,16 @@ model:
       expand_ratio: 4
       aspp_dilations: [1, 2, 4]
       aspp_channels: 112
+    lite_face_parser_v2:
+      stage_channels: [44, 76, 120, 176]
+      stage_repeats: [3, 3, 4]
+      detail_channels: 44
+      texture_channels: 32
+      expand_ratio: 4
+      aspp_dilations: [1, 2, 4, 8]
+      aspp_channels: 140
+      norm_type: "gn"   # gn or bn
+      gn_groups: 8
     srresnet_baseline:
       num_residual_blocks: 16
       context_dilations: [2, 4, 8]

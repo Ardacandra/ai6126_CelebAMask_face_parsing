@@ -17,11 +17,12 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from model import LiteFaceParser, SRResNetBaseline
+from model import LiteFaceParser, LiteFaceParserV2, SRResNetBaseline
 
 MODEL_REGISTRY = {
     "srresnet_baseline": SRResNetBaseline,
     "lite_face_parser": LiteFaceParser,
+    "lite_face_parser_v2": LiteFaceParserV2,
 }
 
 
@@ -268,7 +269,61 @@ def create_model(config):
             aspp_channels=aspp_channels,
         )
 
+    if model_name == "lite_face_parser_v2":
+        stage_channels = arch_cfg.get(
+            "stage_channels", model_cfg.get("stage_channels", [44, 76, 120, 176])
+        )
+        stage_repeats = arch_cfg.get(
+            "stage_repeats", model_cfg.get("stage_repeats", [3, 3, 4])
+        )
+        detail_channels = arch_cfg.get(
+            "detail_channels", model_cfg.get("detail_channels", 44)
+        )
+        texture_channels = arch_cfg.get(
+            "texture_channels", model_cfg.get("texture_channels", 32)
+        )
+        expand_ratio = arch_cfg.get(
+            "expand_ratio", model_cfg.get("expand_ratio", 4)
+        )
+        aspp_dilations = arch_cfg.get(
+            "aspp_dilations", model_cfg.get("aspp_dilations", [1, 2, 4, 8])
+        )
+        aspp_channels = arch_cfg.get(
+            "aspp_channels", model_cfg.get("aspp_channels", 144)
+        )
+        norm_type = arch_cfg.get(
+            "norm_type", model_cfg.get("norm_type", "gn")
+        )
+        gn_groups = arch_cfg.get(
+            "gn_groups", model_cfg.get("gn_groups", 8)
+        )
+        return LiteFaceParserV2(
+            num_classes=num_classes,
+            stage_channels=tuple(stage_channels),
+            stage_repeats=tuple(stage_repeats),
+            detail_channels=detail_channels,
+            texture_channels=texture_channels,
+            expand_ratio=expand_ratio,
+            aspp_dilations=tuple(aspp_dilations),
+            aspp_channels=aspp_channels,
+            norm_type=norm_type,
+            gn_groups=gn_groups,
+        )
+
     raise ValueError(f"Unsupported model name: {model_name}")
+
+
+def extract_logits(model_outputs):
+    if isinstance(model_outputs, torch.Tensor):
+        return model_outputs
+    if isinstance(model_outputs, (tuple, list)) and len(model_outputs) > 0:
+        return model_outputs[0]
+    if isinstance(model_outputs, dict):
+        if "logits" in model_outputs:
+            return model_outputs["logits"]
+        if "out" in model_outputs:
+            return model_outputs["out"]
+    raise TypeError("Model outputs must be a Tensor, tuple/list with logits first, or dict containing logits/out")
 
 
 def create_loss_fn(config):
@@ -465,7 +520,8 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
 
         optimizer.zero_grad()
         outputs = model(images)
-        loss = criterion(outputs, masks)
+        logits = extract_logits(outputs)
+        loss = criterion(logits, masks)
         loss.backward()
         optimizer.step()
 
@@ -526,14 +582,15 @@ def validate(model, dataloader, criterion, device, return_f1=False, ignore_index
 
             masks = masks.to(device).long().squeeze(1)
             outputs = model(images)
-            loss = criterion(outputs, masks)
+            logits = extract_logits(outputs)
+            loss = criterion(logits, masks)
             total_loss += loss.item()
             count += 1
 
             if return_f1:
-                predictions = torch.argmax(outputs, dim=1)
+                predictions = torch.argmax(logits, dim=1)
                 if confusion is None:
-                    num_classes = outputs.shape[1]
+                    num_classes = logits.shape[1]
                     confusion = torch.zeros(
                         (num_classes, num_classes),
                         device=device,
@@ -543,7 +600,7 @@ def validate(model, dataloader, criterion, device, return_f1=False, ignore_index
                     confusion,
                     predictions,
                     masks,
-                    num_classes=outputs.shape[1],
+                    num_classes=logits.shape[1],
                     ignore_index=ignore_index,
                 )
 
@@ -590,7 +647,8 @@ def generate_predictions(model, dataloader, output_dir, device, output_size=(512
             img_files = batch[2]
 
             outputs = model(images)
-            predictions = torch.argmax(outputs, dim=1)
+            logits = extract_logits(outputs)
+            predictions = torch.argmax(logits, dim=1)
 
             for i, img_file in enumerate(img_files):
                 pred_mask = predictions[i].cpu().numpy().astype(np.uint8)
