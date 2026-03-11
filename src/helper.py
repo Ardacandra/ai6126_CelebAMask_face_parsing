@@ -17,7 +17,7 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from model import LiteFaceParser, LiteFaceParserV2, LiteFaceParserV3, LiteFaceParserV4, SRResNetBaseline
+from model import LiteFaceParser, LiteFaceParserV2, LiteFaceParserV3, LiteFaceParserV4, LiteFaceParserV5, SRResNetBaseline
 
 MODEL_REGISTRY = {
     "srresnet_baseline": SRResNetBaseline,
@@ -25,6 +25,7 @@ MODEL_REGISTRY = {
     "lite_face_parser_v2": LiteFaceParserV2,
     "lite_face_parser_v3": LiteFaceParserV3,
     "lite_face_parser_v4": LiteFaceParserV4,
+    "lite_face_parser_v5": LiteFaceParserV5,
 }
 
 
@@ -362,6 +363,36 @@ def create_model(config):
             expand_ratio=expand_ratio,
             aspp_dilations=tuple(aspp_dilations),
             aspp_channels=aspp_channels,
+        )
+
+    if model_name == "lite_face_parser_v5":
+        stage_channels = arch_cfg.get(
+            "stage_channels", model_cfg.get("stage_channels", [32, 48, 64, 96])
+        )
+        expand_ratio = arch_cfg.get(
+            "expand_ratio", model_cfg.get("expand_ratio", 4)
+        )
+        aspp_dilations = arch_cfg.get(
+            "aspp_dilations", model_cfg.get("aspp_dilations", [1, 2, 4])
+        )
+        aspp_channels = arch_cfg.get(
+            "aspp_channels", model_cfg.get("aspp_channels", 64)
+        )
+        eca_kernel_size = arch_cfg.get(
+            "eca_kernel_size", model_cfg.get("eca_kernel_size", 3)
+        )
+        spatial_attn_kernel = arch_cfg.get(
+            "spatial_attn_kernel", model_cfg.get("spatial_attn_kernel", 7)
+        )
+
+        return LiteFaceParserV5(
+            num_classes=num_classes,
+            stage_channels=tuple(stage_channels),
+            expand_ratio=expand_ratio,
+            aspp_dilations=tuple(aspp_dilations),
+            aspp_channels=aspp_channels,
+            eca_kernel_size=eca_kernel_size,
+            spatial_attn_kernel=spatial_attn_kernel,
         )
 
     raise ValueError(f"Unsupported model name: {model_name}")
