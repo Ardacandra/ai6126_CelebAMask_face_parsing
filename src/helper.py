@@ -17,12 +17,13 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from model import LiteFaceParser, LiteFaceParserV2, SRResNetBaseline
+from model import LiteFaceParser, LiteFaceParserV2, LiteFaceParserV3, SRResNetBaseline
 
 MODEL_REGISTRY = {
     "srresnet_baseline": SRResNetBaseline,
     "lite_face_parser": LiteFaceParser,
     "lite_face_parser_v2": LiteFaceParserV2,
+    "lite_face_parser_v3": LiteFaceParserV3,
 }
 
 
@@ -308,6 +309,36 @@ def create_model(config):
             aspp_channels=aspp_channels,
             norm_type=norm_type,
             gn_groups=gn_groups,
+        )
+
+    if model_name == "lite_face_parser_v3":
+        stage_channels = arch_cfg.get(
+            "stage_channels", model_cfg.get("stage_channels", [32, 48, 64, 96])
+        )
+        expand_ratio = arch_cfg.get(
+            "expand_ratio", model_cfg.get("expand_ratio", 4)
+        )
+        aspp_dilations = arch_cfg.get(
+            "aspp_dilations", model_cfg.get("aspp_dilations", [1, 2, 4])
+        )
+        aspp_channels = arch_cfg.get(
+            "aspp_channels", model_cfg.get("aspp_channels", 64)
+        )
+        boundary_refine_channels = arch_cfg.get(
+            "boundary_refine_channels", model_cfg.get("boundary_refine_channels", 48)
+        )
+        boundary_gate_strength = arch_cfg.get(
+            "boundary_gate_strength", model_cfg.get("boundary_gate_strength", 1.0)
+        )
+
+        return LiteFaceParserV3(
+            num_classes=num_classes,
+            stage_channels=tuple(stage_channels),
+            expand_ratio=expand_ratio,
+            aspp_dilations=tuple(aspp_dilations),
+            aspp_channels=aspp_channels,
+            boundary_refine_channels=boundary_refine_channels,
+            boundary_gate_strength=boundary_gate_strength,
         )
 
     raise ValueError(f"Unsupported model name: {model_name}")
