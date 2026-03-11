@@ -195,7 +195,10 @@ def main(config_path=None):
 
     criterion, loss_name = create_loss_fn(config)
     criterion = criterion.to(device)
-    ignore_index = config.get("training", {}).get("loss", {}).get("ignore_index", None)
+    loss_cfg = config.get("training", {}).get("loss", {})
+    ignore_index = loss_cfg.get("ignore_index", None)
+    aux_boundary_cfg = loss_cfg.get("aux_boundary", {})
+    aux_boundary_enabled = bool(aux_boundary_cfg.get("enabled", False))
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = None
@@ -223,6 +226,14 @@ def main(config_path=None):
     log(f"  Epochs: {num_epochs}")
     log(f"  Learning rate: {learning_rate}")
     log(f"  Loss: {loss_name}")
+    if aux_boundary_enabled:
+        log(
+            "  Aux boundary supervision: enabled "
+            f"(weight={aux_boundary_cfg.get('weight', 0.2)}, "
+            f"dilation={aux_boundary_cfg.get('dilation', 3)})"
+        )
+    else:
+        log("  Aux boundary supervision: disabled")
     log(f"  Device: {device}")
     if scheduler is None:
         log("  LR scheduler: disabled")
@@ -244,7 +255,15 @@ def main(config_path=None):
     for epoch in range(num_epochs):
         log(f"\nEpoch {epoch + 1}/{num_epochs}")
 
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
+        train_loss = train_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            device,
+            aux_boundary_cfg=aux_boundary_cfg,
+            ignore_index=ignore_index,
+        )
 
         if has_val_labels and val_loader is not None:
             val_loss, val_f1 = validate(
@@ -254,6 +273,7 @@ def main(config_path=None):
                 device,
                 return_f1=True,
                 ignore_index=ignore_index,
+                aux_boundary_cfg=aux_boundary_cfg,
             )
             log(f"  Train Loss: {train_loss:.4f}")
             log(f"  Val Loss: {val_loss:.4f}")
@@ -304,6 +324,7 @@ def main(config_path=None):
                 device,
                 return_f1=True,
                 ignore_index=ignore_index,
+                aux_boundary_cfg=aux_boundary_cfg,
             )
             log("\nFinal Best Model Validation Metrics:")
             log(f"  Val Loss: {final_val_loss:.4f}")

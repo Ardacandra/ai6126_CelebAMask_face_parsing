@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "lfp_arch_v3"
+  run_id: "lfp_arch_v3_aux_boundary_loss"
 
 # Visualization settings
 visualization:
@@ -50,6 +50,10 @@ training:
       boundary_weight: 1.5
       dice_smooth: 1.0
       dilation: 5
+    aux_boundary:
+      enabled: true
+      weight: 0.2
+      dilation: 3
   scheduler:
     enabled: true
     type: "reduce_on_plateau"

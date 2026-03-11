@@ -357,6 +357,72 @@ def extract_logits(model_outputs):
     raise TypeError("Model outputs must be a Tensor, tuple/list with logits first, or dict containing logits/out")
 
 
+def extract_aux_outputs(model_outputs):
+    if isinstance(model_outputs, (tuple, list)) and len(model_outputs) > 1:
+        aux = model_outputs[1]
+        if isinstance(aux, dict):
+            return aux
+    if isinstance(model_outputs, dict):
+        aux = model_outputs.get("aux", None)
+        if isinstance(aux, dict):
+            return aux
+    return {}
+
+
+def build_boundary_targets(targets, dilation=3, ignore_index=None):
+    edge_x = (targets[:, :, 1:] != targets[:, :, :-1]).float()
+    edge_x = F.pad(edge_x, (0, 1, 0, 0))
+    edge_y = (targets[:, 1:, :] != targets[:, :-1, :]).float()
+    edge_y = F.pad(edge_y, (0, 0, 0, 1))
+    boundaries = torch.clamp(edge_x + edge_y, 0.0, 1.0)
+
+    dilation = max(1, int(dilation))
+    if dilation > 1:
+        boundaries = F.max_pool2d(
+            boundaries.unsqueeze(1),
+            kernel_size=dilation,
+            stride=1,
+            padding=dilation // 2,
+        ).squeeze(1)
+
+    valid_mask = None
+    if ignore_index is not None:
+        valid_mask = (targets != ignore_index).float()
+        boundaries = boundaries * valid_mask
+
+    return boundaries, valid_mask
+
+
+def compute_aux_boundary_loss(outputs, targets, aux_boundary_cfg, ignore_index=None):
+    if not aux_boundary_cfg.get("enabled", False):
+        return None
+
+    aux_outputs = extract_aux_outputs(outputs)
+    boundary_logits = aux_outputs.get("boundary_logits", None)
+    if boundary_logits is None:
+        return None
+
+    target_edges, valid_mask = build_boundary_targets(
+        targets,
+        dilation=int(aux_boundary_cfg.get("dilation", 3)),
+        ignore_index=ignore_index,
+    )
+    target_edges = target_edges.unsqueeze(1)
+
+    if target_edges.shape[-2:] != boundary_logits.shape[-2:]:
+        target_edges = F.interpolate(target_edges, size=boundary_logits.shape[-2:], mode="nearest")
+        if valid_mask is not None:
+            valid_mask = F.interpolate(valid_mask.unsqueeze(1), size=boundary_logits.shape[-2:], mode="nearest")
+
+    if valid_mask is not None:
+        valid_mask = valid_mask.unsqueeze(1) if valid_mask.dim() == 3 else valid_mask
+        bce = F.binary_cross_entropy_with_logits(boundary_logits, target_edges, reduction="none")
+        denom = valid_mask.sum().clamp_min(1.0)
+        return (bce * valid_mask).sum() / denom
+
+    return F.binary_cross_entropy_with_logits(boundary_logits, target_edges)
+
+
 def create_loss_fn(config):
     loss_cfg = config.get("training", {}).get("loss", {})
     loss_name = str(loss_cfg.get("name", "cross_entropy")).lower()
@@ -541,9 +607,11 @@ def count_parameters(model):
     return total_params, trainable_params
 
 
-def train_epoch(model, dataloader, criterion, optimizer, device):
+def train_epoch(model, dataloader, criterion, optimizer, device, aux_boundary_cfg=None, ignore_index=None):
     model.train()
     total_loss = 0
+    if aux_boundary_cfg is None:
+        aux_boundary_cfg = {"enabled": False}
 
     for images, masks, _ in tqdm(dataloader, desc="Training"):
         images = images.to(device)
@@ -553,6 +621,10 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
         outputs = model(images)
         logits = extract_logits(outputs)
         loss = criterion(logits, masks)
+        aux_boundary_loss = compute_aux_boundary_loss(outputs, masks, aux_boundary_cfg, ignore_index=ignore_index)
+        if aux_boundary_loss is not None:
+            aux_weight = float(aux_boundary_cfg.get("weight", 0.0))
+            loss = loss + aux_weight * aux_boundary_loss
         loss.backward()
         optimizer.step()
 
@@ -597,11 +669,21 @@ def _macro_f1_from_confusion(confusion):
     return 0.0
 
 
-def validate(model, dataloader, criterion, device, return_f1=False, ignore_index=None):
+def validate(
+    model,
+    dataloader,
+    criterion,
+    device,
+    return_f1=False,
+    ignore_index=None,
+    aux_boundary_cfg=None,
+):
     model.eval()
     total_loss = 0
     count = 0
     confusion = None
+    if aux_boundary_cfg is None:
+        aux_boundary_cfg = {"enabled": False}
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Validating"):
@@ -615,6 +697,10 @@ def validate(model, dataloader, criterion, device, return_f1=False, ignore_index
             outputs = model(images)
             logits = extract_logits(outputs)
             loss = criterion(logits, masks)
+            aux_boundary_loss = compute_aux_boundary_loss(outputs, masks, aux_boundary_cfg, ignore_index=ignore_index)
+            if aux_boundary_loss is not None:
+                aux_weight = float(aux_boundary_cfg.get("weight", 0.0))
+                loss = loss + aux_weight * aux_boundary_loss
             total_loss += loss.item()
             count += 1
 
