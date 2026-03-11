@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "lfp_arch_v3_aux_boundary_loss"
+  run_id: "lfp_arch_v4"
 
 # Visualization settings
 visualization:
@@ -51,7 +51,7 @@ training:
       dice_smooth: 1.0
       dilation: 5
     aux_boundary:
-      enabled: true
+      enabled: false
       weight: 0.2
       dilation: 3
   scheduler:
@@ -71,7 +71,8 @@ model:
   # name: "srresnet_baseline"
   # name: "lite_face_parser"
   # name: "lite_face_parser_v2"
-  name: "lite_face_parser_v3"
+  # name: "lite_face_parser_v3"
+  name: "lite_face_parser_v4"
   num_classes: 19  # CelebAMask-HQ has 19 classes
   max_params: 1821085
   arch_configs:
@@ -97,6 +98,11 @@ model:
       aspp_channels: 112
       boundary_refine_channels: 48
       boundary_gate_strength: 1.0
+    lite_face_parser_v4:
+      stage_channels: [46, 70, 104, 152]
+      expand_ratio: 4
+      aspp_dilations: [1, 2, 4]
+      aspp_channels: 100
     srresnet_baseline:
       num_residual_blocks: 16
       context_dilations: [2, 4, 8]
