@@ -16,7 +16,7 @@ data:
 # Output directory
 output:
   dir: "out"
-  run_id: "lfp_arch_v5"
+  run_id: "lfp_arch_v2_aug_2x"
 
 # Visualization settings
 visualization:
@@ -70,10 +70,10 @@ training:
 model:
   # name: "srresnet_baseline"
   # name: "lite_face_parser"
-  # name: "lite_face_parser_v2"
+  name: "lite_face_parser_v2"
   # name: "lite_face_parser_v3"
   # name: "lite_face_parser_v4"
-  name: "lite_face_parser_v5"
+  # name: "lite_face_parser_v5"
   num_classes: 19  # CelebAMask-HQ has 19 classes
   max_params: 1821085
   arch_configs:

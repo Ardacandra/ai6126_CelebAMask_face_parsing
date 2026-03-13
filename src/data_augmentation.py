@@ -60,10 +60,19 @@ def build_augmentations():
     ]
 
 
-def select_augmentation_for_index(index: int, augmentations):
+def select_augmentations_for_index(index: int, augmentations, num_augs_per_image: int = 2):
     if not augmentations:
         raise ValueError("No augmentation methods configured.")
-    return augmentations[index % len(augmentations)]
+    if num_augs_per_image < 1:
+        raise ValueError("num_augs_per_image must be at least 1")
+    if len(augmentations) < num_augs_per_image:
+        raise ValueError(
+            "Number of configured augmentations is smaller than num_augs_per_image"
+        )
+
+    start = index % len(augmentations)
+    selected = [augmentations[(start + offset) % len(augmentations)] for offset in range(num_augs_per_image)]
+    return selected
 
 
 def save_mask(mask: Image.Image, save_path: Path):
@@ -144,6 +153,7 @@ def main():
 
     image_files = sorted(train_images_dir.glob("*.jpg"))
     augmentations = build_augmentations()
+    num_augs_per_image = 2
 
     debug_records = []
     processed = 0
@@ -166,23 +176,29 @@ def main():
         image.save(original_image_out, quality=95)
         save_mask(mask, original_mask_out)
 
-        method_name, method_fn = select_augmentation_for_index(processed, augmentations)
-        aug_image, aug_mask = method_fn(image, mask)
-        aug_image_out = out_images_dir / f"{base_name}__{method_name}.jpg"
-        aug_mask_out = out_masks_dir / f"{base_name}__{method_name}.png"
-
-        aug_image.save(aug_image_out, quality=95)
-        save_mask(aug_mask, aug_mask_out)
-
-        debug_records.append(
-            {
-                "image_path": str(aug_image_out),
-                "mask_path": str(aug_mask_out),
-                "source": image_path.name,
-                "method": method_name,
-            }
+        selected_augs = select_augmentations_for_index(
+            processed,
+            augmentations,
+            num_augs_per_image=num_augs_per_image,
         )
-        method_counts[method_name] += 1
+
+        for method_name, method_fn in selected_augs:
+            aug_image, aug_mask = method_fn(image, mask)
+            aug_image_out = out_images_dir / f"{base_name}__{method_name}.jpg"
+            aug_mask_out = out_masks_dir / f"{base_name}__{method_name}.png"
+
+            aug_image.save(aug_image_out, quality=95)
+            save_mask(aug_mask, aug_mask_out)
+
+            debug_records.append(
+                {
+                    "image_path": str(aug_image_out),
+                    "mask_path": str(aug_mask_out),
+                    "source": image_path.name,
+                    "method": method_name,
+                }
+            )
+            method_counts[method_name] += 1
 
         processed += 1
 
