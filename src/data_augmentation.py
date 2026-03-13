@@ -153,7 +153,7 @@ def main():
 
     image_files = sorted(train_images_dir.glob("*.jpg"))
     augmentations = build_augmentations()
-    num_augs_per_image = 2
+    num_augs_per_image = len(augmentations)
 
     debug_records = []
     processed = 0
