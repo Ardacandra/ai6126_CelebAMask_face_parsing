@@ -102,7 +102,7 @@ This creates:
 python src/postprocessing.py
 ```
 
-This creates `out/<run_id>/submission_<method>/masks/*.png` and `out/<run_id>/<run_id>_post_<method>_submission.zip`.
+This creates `out/<run_id>/submission_<method>/masks/*.png` and `out/<run_id>/<run_id>_post_<method>_submission.zip`
 
 ### Grid Search
 
@@ -129,3 +129,20 @@ python grid_search.py \
     --dice-smooth-values 1.0 \
     --skip-completed
 ```
+
+### Running The Packaged Submission
+
+The repository also includes a ready-to-run submission package in `submission/submission_lfp_arch_v2_aug_all_pp/`.
+
+Install its dependencies and run inference on a folder of test images with:
+
+```bash
+pip install -r submission/submission_lfp_arch_v2_aug_all_pp/solution/requirements.txt
+python submission/submission_lfp_arch_v2_aug_all_pp/solution/run_folder.py \
+    --input-dir data/test/images \
+    --output-dir submission/submission_lfp_arch_v2_aug_all_pp/masks \
+    --weights submission/submission_lfp_arch_v2_aug_all_pp/solution/ckpt.pth \
+    --run-script submission/submission_lfp_arch_v2_aug_all_pp/solution/run.py
+```
+
+This writes one `.png` parsing mask per input image into `submission/submission_lfp_arch_v2_aug_all_pp/masks/`.
